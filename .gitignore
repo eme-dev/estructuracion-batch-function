@@ -1,0 +1,8 @@
+target/
+local.settings.json
+*.log
+*.tmp
+.idea/
+.vscode/
+*.iml
+.azure/

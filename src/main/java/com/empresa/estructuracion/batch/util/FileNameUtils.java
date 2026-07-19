@@ -1,0 +1,24 @@
+package com.empresa.estructuracion.batch.util;
+
+import com.empresa.estructuracion.batch.model.ExecutionContext;
+
+import java.time.format.DateTimeFormatter;
+
+public final class FileNameUtils {
+    private static final DateTimeFormatter BASIC_DATE = DateTimeFormatter.BASIC_ISO_DATE;
+
+    private FileNameUtils() {
+    }
+
+    public static String csvPath(String basePath, ExecutionContext execution) {
+        String date = execution.businessDate().format(DateTimeFormatter.ISO_DATE);
+        String yyyymmdd = execution.businessDate().format(BASIC_DATE);
+        return "%s/businessDate=%s/estructuracion_%s_%s.csv"
+                .formatted(basePath, date, yyyymmdd, execution.executionId());
+    }
+
+    public static String manifestPath(String csvPath) {
+        return csvPath.replace(".csv", ".manifest.json");
+    }
+}
+

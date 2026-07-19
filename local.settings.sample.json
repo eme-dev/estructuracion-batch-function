@@ -1,0 +1,19 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "java",
+    "BATCH_TIMER_CRON": "0 10 0 * * *",
+    "BATCH_ZONE_ID": "America/Lima",
+    "BATCH_SQL_CONNECTION_STRING": "jdbc:sqlserver://server.database.windows.net:1433;databaseName=db;user=user;password=password;encrypt=true;trustServerCertificate=false;",
+    "BATCH_SQL_STALE_MINUTES": "15",
+    "BATCH_SQL_MAX_ATTEMPTS": "3",
+    "BATCH_SQL_BATCH_SIZE": "1000",
+    "BATCH_STORAGE_CONNECTION_STRING": "DefaultEndpointsProtocol=https;AccountName=...;AccountKey=...;EndpointSuffix=core.windows.net",
+    "BATCH_STORAGE_CONTAINER": "exports",
+    "BATCH_STORAGE_BASE_PATH": "estructuracion",
+    "BATCH_KEY_VAULT_URL": "https://kv-estruct-batch-dev.vault.azure.net/",
+    "BATCH_RSA_KEY_NAME": "rsa-estruct-batch-key",
+    "BATCH_WRAPPED_AES_SECRET_NAME": "wrapped-aes-key"
+  }
+}

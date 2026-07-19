@@ -2,12 +2,13 @@ package com.empresa.estructuracion.batch.config;
 
 import com.empresa.estructuracion.batch.repository.ExecutionRepository;
 import com.empresa.estructuracion.batch.repository.StagingRepository;
+import com.empresa.estructuracion.batch.service.DataMapCryptoService;
 import com.empresa.estructuracion.batch.service.EstructuracionBatchService;
 import com.empresa.estructuracion.batch.repository.impl.SqlExecutionRepository;
 import com.empresa.estructuracion.batch.repository.impl.SqlStagingRepository;
 import com.empresa.estructuracion.batch.service.impl.BlobStorageService;
 import com.empresa.estructuracion.batch.service.impl.CryptoService;
-import com.empresa.estructuracion.batch.service.impl.CsvGenerationService;
+import com.empresa.estructuracion.batch.service.impl.JsonlGenerationService;
 import com.empresa.estructuracion.batch.service.impl.ManifestService;
 import com.empresa.estructuracion.batch.service.impl.TelemetryService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -19,9 +20,16 @@ import java.time.ZoneId;
 public class DependencyConfig {
 
     private final EstructuracionBatchService estructuracionBatchService;
+    private final DataMapCryptoService dataMapCryptoService;
+    private final ObjectMapper objectMapper;
 
-    private DependencyConfig(EstructuracionBatchService estructuracionBatchService) {
+    private DependencyConfig(
+            EstructuracionBatchService estructuracionBatchService,
+            DataMapCryptoService dataMapCryptoService,
+            ObjectMapper objectMapper) {
         this.estructuracionBatchService = estructuracionBatchService;
+        this.dataMapCryptoService = dataMapCryptoService;
+        this.objectMapper = objectMapper;
     }
 
     public static DependencyConfig fromEnvironment() {
@@ -51,24 +59,34 @@ public class DependencyConfig {
         ExecutionRepository executionRepository = new SqlExecutionRepository(sqlConnectionProvider);
         StagingRepository stagingRepository = new SqlStagingRepository(sqlConnectionProvider);
         CryptoService cryptoService = new CryptoService(keyVaultConfig, objectMapper);
-        CsvGenerationService csvGenerationService = new CsvGenerationService(objectMapper);
+        JsonlGenerationService jsonlGenerationService = new JsonlGenerationService(objectMapper);
         BlobStorageService blobStorageService = new BlobStorageService(storageConfig);
         ManifestService manifestService = new ManifestService(objectMapper);
         TelemetryService telemetryService = new TelemetryService();
 
-        return new DependencyConfig(new EstructuracionBatchService(
+        EstructuracionBatchService estructuracionBatchService = new EstructuracionBatchService(
                 batchProperties,
                 executionRepository,
                 stagingRepository,
                 cryptoService,
-                csvGenerationService,
+                jsonlGenerationService,
                 blobStorageService,
                 manifestService,
-                telemetryService));
+                telemetryService);
+
+        return new DependencyConfig(estructuracionBatchService, cryptoService, objectMapper);
     }
 
     public EstructuracionBatchService estructuracionBatchService() {
         return estructuracionBatchService;
+    }
+
+    public DataMapCryptoService dataMapCryptoService() {
+        return dataMapCryptoService;
+    }
+
+    public ObjectMapper objectMapper() {
+        return objectMapper;
     }
 
     private static String required(String name) {

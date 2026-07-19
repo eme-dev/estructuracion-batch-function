@@ -37,7 +37,7 @@ public class BlobStorageService implements StoragePublisherService {
             blockBlobClient.stageBlock(blockId, BinaryData.fromBytes(content));
             blockIds.add(blockId);
         } catch (Exception ex) {
-            throw new StoragePublicationException("Unable to stage CSV block.", ex);
+            throw new StoragePublicationException("Unable to stage output block.", ex);
         }
     }
 
@@ -48,7 +48,7 @@ public class BlobStorageService implements StoragePublisherService {
             blockBlobClient.commitBlockList(blockIds);
             blockIds.clear();
         } catch (Exception ex) {
-            throw new StoragePublicationException("Unable to commit CSV blocks.", ex);
+            throw new StoragePublicationException("Unable to commit output blocks.", ex);
         }
     }
 

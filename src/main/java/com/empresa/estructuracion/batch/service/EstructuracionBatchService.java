@@ -25,13 +25,13 @@ import java.util.UUID;
 import java.util.logging.Logger;
 
 public class EstructuracionBatchService {
-    private static final String CONTENT_TYPE = "text/csv; charset=utf-8";
+    private static final String CONTENT_TYPE = "application/x-ndjson; charset=utf-8";
 
     private final BatchProperties properties;
     private final ExecutionRepository executionRepository;
     private final StagingRepository stagingRepository;
     private final DataMapCryptoService cryptoService;
-    private final CsvWriterService csvGenerationService;
+    private final OutputWriterService outputWriterService;
     private final StoragePublisherService blobStorageService;
     private final ManifestWriterService manifestService;
     private final BatchTelemetryService telemetryService;
@@ -41,7 +41,7 @@ public class EstructuracionBatchService {
             ExecutionRepository executionRepository,
             StagingRepository stagingRepository,
             DataMapCryptoService cryptoService,
-            CsvWriterService csvGenerationService,
+            OutputWriterService outputWriterService,
             StoragePublisherService blobStorageService,
             ManifestWriterService manifestService,
             BatchTelemetryService telemetryService) {
@@ -49,7 +49,7 @@ public class EstructuracionBatchService {
         this.executionRepository = executionRepository;
         this.stagingRepository = stagingRepository;
         this.cryptoService = cryptoService;
-        this.csvGenerationService = csvGenerationService;
+        this.outputWriterService = outputWriterService;
         this.blobStorageService = blobStorageService;
         this.manifestService = manifestService;
         this.telemetryService = telemetryService;
@@ -78,7 +78,7 @@ public class EstructuracionBatchService {
             telemetryService.trackBatchStarted(logger, execution);
 
             aesKey = cryptoService.unwrapAesKey();
-            BatchResult result = generateAndPublishCsv(execution, aesKey);
+            BatchResult result = generateAndPublishOutput(execution, aesKey);
 
             executionRepository.markPublishing(execution.executionId());
             blobStorageService.commitBlocks(result.fileName());
@@ -102,15 +102,14 @@ public class EstructuracionBatchService {
         }
     }
 
-    private BatchResult generateAndPublishCsv(ExecutionContext execution, byte[] aesKey) {
-        String csvName = FileNameUtils.csvPath(properties.storageBasePath(), execution);
-        String manifestName = FileNameUtils.manifestPath(csvName);
+    private BatchResult generateAndPublishOutput(ExecutionContext execution, byte[] aesKey) {
+        String outputName = FileNameUtils.outputPath(properties.storageBasePath(), execution);
+        String manifestName = FileNameUtils.manifestPath(outputName);
         MessageDigest digest = HashUtils.sha256();
         long contentLength = 0;
         long recordCount = 0;
         int blockNumber = 0;
         int lastSourceId = 0;
-        boolean headerWritten = false;
         blobStorageService.beginPublication();
 
         while (true) {
@@ -123,35 +122,26 @@ public class EstructuracionBatchService {
             }
 
             ByteArrayOutputStream block = new ByteArrayOutputStream();
-            if (!headerWritten) {
-                byte[] header = csvGenerationService.headerBytes(digest);
-                block.writeBytes(header);
-                contentLength += header.length;
-                headerWritten = true;
-            }
-
             for (StagingRecord record : records) {
                 String decryptedDataMap = cryptoService.decryptDataMap(record.encryptedDataMap(), aesKey);
-                byte[] row = csvGenerationService.rowBytes(record, decryptedDataMap, digest);
+                byte[] row = outputWriterService.rowBytes(record, decryptedDataMap, digest);
                 block.writeBytes(row);
                 contentLength += row.length;
                 recordCount++;
                 lastSourceId = record.sourceId();
             }
 
-            blobStorageService.stageBlock(csvName, ++blockNumber, block.toByteArray());
+            blobStorageService.stageBlock(outputName, ++blockNumber, block.toByteArray());
             executionRepository.updateHeartbeat(execution.executionId());
         }
 
-        if (!headerWritten) {
-            byte[] header = csvGenerationService.headerBytes(digest);
-            blobStorageService.stageBlock(csvName, ++blockNumber, header);
-            contentLength += header.length;
+        if (blockNumber == 0) {
+            blobStorageService.stageBlock(outputName, ++blockNumber, new byte[0]);
         }
 
         return new BatchResult(
                 execution.executionId(),
-                csvName,
+                outputName,
                 manifestName,
                 recordCount,
                 contentLength,

@@ -81,7 +81,11 @@ public class EstructuracionBatchService {
             BatchResult result = generateAndPublishOutput(execution, aesKey);
 
             executionRepository.markPublishing(execution.executionId());
-            blobStorageService.commitBlocks(result.fileName());
+            if (result.contentLength() == 0) {
+                blobStorageService.uploadEmptyBlob(result.fileName());
+            } else {
+                blobStorageService.commitBlocks(result.fileName());
+            }
 
             Manifest manifest = new Manifest(
                     execution.executionId(),
@@ -133,10 +137,6 @@ public class EstructuracionBatchService {
 
             blobStorageService.stageBlock(outputName, ++blockNumber, block.toByteArray());
             executionRepository.updateHeartbeat(execution.executionId());
-        }
-
-        if (blockNumber == 0) {
-            blobStorageService.stageBlock(outputName, ++blockNumber, new byte[0]);
         }
 
         return new BatchResult(

@@ -53,6 +53,16 @@ public class BlobStorageService implements StoragePublisherService {
     }
 
     @Override
+    public void uploadEmptyBlob(String blobName) {
+        try {
+            containerClient.getBlobClient(blobName)
+                    .upload(BinaryData.fromBytes(new byte[0]), true);
+        } catch (Exception ex) {
+            throw new StoragePublicationException("Unable to upload empty output blob.", ex);
+        }
+    }
+
+    @Override
     public void uploadManifest(String manifestName, String manifestJson) {
         try {
             containerClient.getBlobClient(manifestName)

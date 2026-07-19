@@ -7,6 +7,7 @@ public interface StoragePublisherService {
 
     void commitBlocks(String blobName);
 
+    void uploadEmptyBlob(String blobName);
+
     void uploadManifest(String manifestName, String manifestJson);
 }
-

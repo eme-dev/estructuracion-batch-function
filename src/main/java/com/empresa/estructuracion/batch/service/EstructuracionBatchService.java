@@ -1,7 +1,6 @@
 package com.empresa.estructuracion.batch.service;
 
 import com.empresa.estructuracion.batch.config.BatchProperties;
-import com.empresa.estructuracion.batch.exception.BatchException;
 import com.empresa.estructuracion.batch.exception.StorageReconciliationRequiredException;
 import com.empresa.estructuracion.batch.model.BatchError;
 import com.empresa.estructuracion.batch.model.BatchResult;
@@ -40,21 +39,15 @@ public class EstructuracionBatchService {
 
     public EstructuracionBatchService(
             BatchProperties properties,
-            ExecutionRepository executionRepository,
-            StagingRepository stagingRepository,
-            DataMapCryptoService cryptoService,
-            OutputWriterService outputWriterService,
-            StoragePublisherService blobStorageService,
-            ManifestWriterService manifestService,
-            BatchTelemetryService telemetryService) {
+            EstructuracionBatchDependencies dependencies) {
         this.properties = properties;
-        this.executionRepository = executionRepository;
-        this.stagingRepository = stagingRepository;
-        this.cryptoService = cryptoService;
-        this.outputWriterService = outputWriterService;
-        this.blobStorageService = blobStorageService;
-        this.manifestService = manifestService;
-        this.telemetryService = telemetryService;
+        this.executionRepository = dependencies.executionRepository();
+        this.stagingRepository = dependencies.stagingRepository();
+        this.cryptoService = dependencies.cryptoService();
+        this.outputWriterService = dependencies.outputWriterService();
+        this.blobStorageService = dependencies.storagePublisherService();
+        this.manifestService = dependencies.manifestWriterService();
+        this.telemetryService = dependencies.telemetryService();
     }
 
     public void execute(Logger logger) {
@@ -101,9 +94,9 @@ public class EstructuracionBatchService {
             blobStorageService.uploadManifest(result.manifestFileName(), manifestService.toJson(manifest));
             executionRepository.complete(result);
             telemetryService.trackBatchCompleted(logger, result);
-        } catch (Exception ex) {
+        } catch (RuntimeException ex) {
             handleFailure(logger, execution == null ? null : execution.executionId(), ex);
-            throw ex instanceof RuntimeException ? (RuntimeException) ex : new BatchException("Batch failed.", ex);
+            throw ex;
         } finally {
             cryptoService.clearKey(aesKey);
         }
@@ -165,15 +158,6 @@ public class EstructuracionBatchService {
     }
 
     private String sanitizeFailureMessage(Exception ex) {
-        String message = ex.getMessage();
-        if (message == null || message.isBlank()) {
-            return ex.getClass().getSimpleName();
-        }
-        String sanitized = message
-                .replaceAll("(?i)password\\s*=\\s*[^;\\s]+", "password=***")
-                .replaceAll("(?i)AccountKey\\s*=\\s*[^;\\s]+", "AccountKey=***")
-                .replaceAll("(?i)SharedAccessSignature\\s*=\\s*[^;\\s]+", "SharedAccessSignature=***")
-                .replaceAll("[\\r\\n\\t]+", " ");
-        return sanitized.substring(0, Math.min(sanitized.length(), 1000));
+        return ex.getClass().getSimpleName();
     }
 }

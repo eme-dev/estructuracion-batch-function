@@ -2,6 +2,7 @@ package com.empresa.estructuracion.batch.config;
 
 import com.empresa.estructuracion.batch.repository.ExecutionRepository;
 import com.empresa.estructuracion.batch.repository.StagingRepository;
+import com.empresa.estructuracion.batch.service.EstructuracionBatchDependencies;
 import com.empresa.estructuracion.batch.service.EstructuracionBatchService;
 import com.empresa.estructuracion.batch.repository.impl.SqlExecutionRepository;
 import com.empresa.estructuracion.batch.repository.impl.SqlStagingRepository;
@@ -56,8 +57,7 @@ public class DependencyConfig {
         ManifestService manifestService = new ManifestService(objectMapper);
         TelemetryService telemetryService = new TelemetryService();
 
-        EstructuracionBatchService estructuracionBatchService = new EstructuracionBatchService(
-                batchProperties,
+        EstructuracionBatchDependencies dependencies = new EstructuracionBatchDependencies(
                 executionRepository,
                 stagingRepository,
                 cryptoService,
@@ -65,6 +65,9 @@ public class DependencyConfig {
                 blobStorageService,
                 manifestService,
                 telemetryService);
+        EstructuracionBatchService estructuracionBatchService = new EstructuracionBatchService(
+                batchProperties,
+                dependencies);
 
         return new DependencyConfig(estructuracionBatchService);
     }

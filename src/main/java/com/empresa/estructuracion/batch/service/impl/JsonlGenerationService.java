@@ -1,5 +1,6 @@
 package com.empresa.estructuracion.batch.service.impl;
 
+import com.empresa.estructuracion.batch.exception.DataMapInvalidException;
 import com.empresa.estructuracion.batch.model.StagingRecord;
 import com.empresa.estructuracion.batch.service.OutputWriterService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -39,7 +40,7 @@ public class JsonlGenerationService implements OutputWriterService {
             digest.update(bytes);
             return bytes;
         } catch (Exception ex) {
-            throw new IllegalArgumentException("Unable to generate JSONL row.", ex);
+            throw new DataMapInvalidException("Unable to generate JSONL row from dataMap/listaTables JSON.", ex);
         }
     }
 }

@@ -16,17 +16,14 @@ import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
-import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.Base64;
 
 public class CryptoService implements DataMapCryptoService {
     private static final int GCM_TAG_BITS = 128;
-    private static final int GCM_IV_BYTES = 12;
 
     private final KeyVaultConfig keyVaultConfig;
     private final ObjectMapper objectMapper;
-    private final SecureRandom secureRandom = new SecureRandom();
 
     public CryptoService(KeyVaultConfig keyVaultConfig, ObjectMapper objectMapper) {
         this.keyVaultConfig = keyVaultConfig;
@@ -56,33 +53,8 @@ public class CryptoService implements DataMapCryptoService {
             return cryptographyClient.unwrapKey(KeyWrapAlgorithm.RSA_OAEP_256, wrappedAesBytes).getKey();
         } catch (Exception ex) {
             throw new CryptoException(
-                    "Unable to unwrap AES key from Key Vault. cause="
-                            + ex.getClass().getSimpleName()
-                            + ", message="
-                            + safeMessage(ex),
+                    "Unable to unwrap AES key from Key Vault. cause=" + ex.getClass().getSimpleName(),
                     ex);
-        }
-    }
-
-    @Override
-    public String encryptDataMap(String dataMapJson, byte[] aesKey) {
-        try {
-            byte[] iv = new byte[GCM_IV_BYTES];
-            secureRandom.nextBytes(iv);
-
-            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(
-                    Cipher.ENCRYPT_MODE,
-                    new SecretKeySpec(aesKey, "AES"),
-                    new GCMParameterSpec(GCM_TAG_BITS, iv));
-            byte[] ciphertext = cipher.doFinal(dataMapJson.getBytes(StandardCharsets.UTF_8));
-
-            return objectMapper.writeValueAsString(new EncryptedDataMapEnvelope(
-                    "AES/GCM/NoPadding",
-                    Base64.getEncoder().encodeToString(iv),
-                    Base64.getEncoder().encodeToString(ciphertext)));
-        } catch (Exception ex) {
-            throw new CryptoException("Unable to encrypt dataMap.", ex);
         }
     }
 
@@ -133,12 +105,5 @@ public class CryptoService implements DataMapCryptoService {
         byte[] result = Arrays.copyOf(left, left.length + right.length);
         System.arraycopy(right, 0, result, left.length, right.length);
         return result;
-    }
-
-    private String safeMessage(Exception ex) {
-        return ex.getMessage() == null ? "No details" : ex.getMessage();
-    }
-
-    private record EncryptedDataMapEnvelope(String alg, String iv, String ciphertext) {
     }
 }

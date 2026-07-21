@@ -2,7 +2,6 @@ package com.empresa.estructuracion.batch.config;
 
 import com.empresa.estructuracion.batch.repository.ExecutionRepository;
 import com.empresa.estructuracion.batch.repository.StagingRepository;
-import com.empresa.estructuracion.batch.service.DataMapCryptoService;
 import com.empresa.estructuracion.batch.service.EstructuracionBatchService;
 import com.empresa.estructuracion.batch.repository.impl.SqlExecutionRepository;
 import com.empresa.estructuracion.batch.repository.impl.SqlStagingRepository;
@@ -20,16 +19,9 @@ import java.time.ZoneId;
 public class DependencyConfig {
 
     private final EstructuracionBatchService estructuracionBatchService;
-    private final DataMapCryptoService dataMapCryptoService;
-    private final ObjectMapper objectMapper;
 
-    private DependencyConfig(
-            EstructuracionBatchService estructuracionBatchService,
-            DataMapCryptoService dataMapCryptoService,
-            ObjectMapper objectMapper) {
+    private DependencyConfig(EstructuracionBatchService estructuracionBatchService) {
         this.estructuracionBatchService = estructuracionBatchService;
-        this.dataMapCryptoService = dataMapCryptoService;
-        this.objectMapper = objectMapper;
     }
 
     public static DependencyConfig fromEnvironment() {
@@ -74,19 +66,11 @@ public class DependencyConfig {
                 manifestService,
                 telemetryService);
 
-        return new DependencyConfig(estructuracionBatchService, cryptoService, objectMapper);
+        return new DependencyConfig(estructuracionBatchService);
     }
 
     public EstructuracionBatchService estructuracionBatchService() {
         return estructuracionBatchService;
-    }
-
-    public DataMapCryptoService dataMapCryptoService() {
-        return dataMapCryptoService;
-    }
-
-    public ObjectMapper objectMapper() {
-        return objectMapper;
     }
 
     private static String required(String name) {

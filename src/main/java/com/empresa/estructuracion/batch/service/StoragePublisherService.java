@@ -1,11 +1,13 @@
 package com.empresa.estructuracion.batch.service;
 
+import com.empresa.estructuracion.batch.model.PublicationSession;
+
 public interface StoragePublisherService {
-    void beginPublication();
+    PublicationSession beginPublication();
 
-    void stageBlock(String blobName, int blockNumber, byte[] content);
+    void stageBlock(PublicationSession session, String blobName, int blockNumber, byte[] content);
 
-    void commitBlocks(String blobName);
+    void commitBlocks(PublicationSession session, String blobName);
 
     void uploadEmptyBlob(String blobName);
 

@@ -2,12 +2,14 @@ package com.empresa.estructuracion.batch.service;
 
 import com.empresa.estructuracion.batch.config.BatchProperties;
 import com.empresa.estructuracion.batch.exception.BatchException;
+import com.empresa.estructuracion.batch.exception.StorageReconciliationRequiredException;
 import com.empresa.estructuracion.batch.model.BatchError;
 import com.empresa.estructuracion.batch.model.BatchResult;
 import com.empresa.estructuracion.batch.model.BusinessDateCutoff;
 import com.empresa.estructuracion.batch.model.ExecutionContext;
 import com.empresa.estructuracion.batch.model.ExecutionStatus;
 import com.empresa.estructuracion.batch.model.Manifest;
+import com.empresa.estructuracion.batch.model.PublicationSession;
 import com.empresa.estructuracion.batch.model.StagingRecord;
 import com.empresa.estructuracion.batch.repository.ExecutionRepository;
 import com.empresa.estructuracion.batch.repository.StagingRepository;
@@ -67,7 +69,8 @@ public class EstructuracionBatchService {
             if (recoverable.isPresent()) {
                 execution = recoverable.get();
                 if (execution.status() == ExecutionStatus.PUBLISHING) {
-                    throw new BatchException("Publishing execution found. Storage reconciliation is required before continuing.");
+                    throw new StorageReconciliationRequiredException(
+                            "Publishing execution found. Storage reconciliation is required before continuing.");
                 }
                 logger.info("Recoverable execution found. Reusing executionId=" + execution.executionId());
             } else {
@@ -84,7 +87,7 @@ public class EstructuracionBatchService {
             if (result.contentLength() == 0) {
                 blobStorageService.uploadEmptyBlob(result.fileName());
             } else {
-                blobStorageService.commitBlocks(result.fileName());
+                blobStorageService.commitBlocks(result.publicationSession(), result.fileName());
             }
 
             Manifest manifest = new Manifest(
@@ -109,12 +112,12 @@ public class EstructuracionBatchService {
     private BatchResult generateAndPublishOutput(ExecutionContext execution, byte[] aesKey) {
         String outputName = FileNameUtils.outputPath(properties.storageBasePath(), execution);
         String manifestName = FileNameUtils.manifestPath(outputName);
+        PublicationSession publicationSession = blobStorageService.beginPublication();
         MessageDigest digest = HashUtils.sha256();
         long contentLength = 0;
         long recordCount = 0;
         int blockNumber = 0;
         int lastSourceId = 0;
-        blobStorageService.beginPublication();
 
         while (true) {
             List<StagingRecord> records = stagingRepository.readBatch(
@@ -135,7 +138,7 @@ public class EstructuracionBatchService {
                 lastSourceId = record.sourceId();
             }
 
-            blobStorageService.stageBlock(outputName, ++blockNumber, block.toByteArray());
+            blobStorageService.stageBlock(publicationSession, outputName, ++blockNumber, block.toByteArray());
             executionRepository.updateHeartbeat(execution.executionId());
         }
 
@@ -143,14 +146,15 @@ public class EstructuracionBatchService {
                 execution.executionId(),
                 outputName,
                 manifestName,
+                publicationSession,
                 recordCount,
                 contentLength,
                 digest.digest());
     }
 
     private void handleFailure(Logger logger, UUID executionId, Exception ex) {
-        String sanitized = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
-        if (executionId != null) {
+        String sanitized = sanitizeFailureMessage(ex);
+        if (executionId != null && !(ex instanceof StorageReconciliationRequiredException)) {
             executionRepository.fail(executionId, ex.getClass().getSimpleName(), sanitized);
         }
         telemetryService.trackBatchFailed(logger, new BatchError(
@@ -158,5 +162,18 @@ public class EstructuracionBatchService {
                 ex.getClass().getSimpleName(),
                 "TECHNICAL",
                 sanitized));
+    }
+
+    private String sanitizeFailureMessage(Exception ex) {
+        String message = ex.getMessage();
+        if (message == null || message.isBlank()) {
+            return ex.getClass().getSimpleName();
+        }
+        String sanitized = message
+                .replaceAll("(?i)password\\s*=\\s*[^;\\s]+", "password=***")
+                .replaceAll("(?i)AccountKey\\s*=\\s*[^;\\s]+", "AccountKey=***")
+                .replaceAll("(?i)SharedAccessSignature\\s*=\\s*[^;\\s]+", "SharedAccessSignature=***")
+                .replaceAll("[\\r\\n\\t]+", " ");
+        return sanitized.substring(0, Math.min(sanitized.length(), 1000));
     }
 }

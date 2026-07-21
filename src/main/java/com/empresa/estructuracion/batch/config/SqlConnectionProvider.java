@@ -1,7 +1,5 @@
 package com.empresa.estructuracion.batch.config;
 
-import com.empresa.estructuracion.batch.config.SqlConfig;
-
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;

@@ -47,50 +47,6 @@ POST /api/estructuracion/batch/run
 
 El endpoint usa authorization level `FUNCTION`, por lo que requiere function key cuando se ejecuta fuera del host local.
 
-## Cifrado de dataMap para pruebas E2E
-
-Para generar datos cifrados de prueba existe un HTTP Trigger auxiliar:
-
-```text
-POST /api/estructuracion/crypto/encrypt-datamap
-```
-
-Debe habilitarse explicitamente con:
-
-```text
-CRYPTO_TEST_FUNCTION_ENABLED=true
-```
-
-El body puede ser el `dataMap` JSON directamente:
-
-```json
-{
-  "cliente": "demo",
-  "monto": 100.50
-}
-```
-
-O un wrapper con la propiedad `dataMap`:
-
-```json
-{
-  "dataMap": {
-    "cliente": "demo",
-    "monto": 100.50
-  }
-}
-```
-
-La respuesta contiene el valor que debe guardarse en `ocrt.Estructuracion.dataMap` para probar el flujo completo:
-
-```json
-{
-  "encryptedDataMap": "{\"alg\":\"AES/GCM/NoPadding\",\"iv\":\"...\",\"ciphertext\":\"...\"}"
-}
-```
-
-Esta funcion es solo para ambientes de desarrollo o pruebas. No registra el JSON claro ni la llave AES.
-
 ## Nota de runtime
 
 El proyecto esta configurado para Java 21. Para compilar localmente, el `JAVA_HOME` debe apuntar a un JDK 21.

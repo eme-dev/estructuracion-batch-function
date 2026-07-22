@@ -26,7 +26,7 @@ import java.util.UUID;
 import java.util.logging.Logger;
 
 public class EstructuracionBatchService {
-    private static final String CONTENT_TYPE = "application/x-ndjson; charset=utf-8";
+    private static final String CONTENT_TYPE = "text/csv; charset=utf-8";
 
     private final BatchProperties properties;
     private final ExecutionRepository executionRepository;
@@ -111,6 +111,7 @@ public class EstructuracionBatchService {
         long recordCount = 0;
         int blockNumber = 0;
         int lastSourceId = 0;
+        boolean headerWritten = false;
 
         while (true) {
             List<StagingRecord> records = stagingRepository.readBatch(
@@ -122,6 +123,13 @@ public class EstructuracionBatchService {
             }
 
             ByteArrayOutputStream block = new ByteArrayOutputStream();
+            if (!headerWritten) {
+                byte[] header = outputWriterService.headerBytes(digest);
+                block.writeBytes(header);
+                contentLength += header.length;
+                headerWritten = true;
+            }
+
             for (StagingRecord record : records) {
                 String decryptedDataMap = cryptoService.decryptDataMap(record.encryptedDataMap(), aesKey);
                 byte[] row = outputWriterService.rowBytes(record, decryptedDataMap, digest);
@@ -133,6 +141,12 @@ public class EstructuracionBatchService {
 
             blobStorageService.stageBlock(publicationSession, outputName, ++blockNumber, block.toByteArray());
             executionRepository.updateHeartbeat(execution.executionId());
+        }
+
+        if (!headerWritten) {
+            byte[] header = outputWriterService.headerBytes(digest);
+            blobStorageService.stageBlock(publicationSession, outputName, ++blockNumber, header);
+            contentLength += header.length;
         }
 
         return new BatchResult(

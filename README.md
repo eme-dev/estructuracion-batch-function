@@ -1,6 +1,6 @@
 # Estructuracion Batch Function
 
-Azure Function Java 21 para generar un archivo JSONL diario a partir del snapshot de `ocrt.Estructuracion`.
+Azure Function Java 21 para generar un archivo CSV diario a partir del snapshot de `ocrt.Estructuracion`.
 
 ## Flujo inicial
 
@@ -11,24 +11,25 @@ Azure Function Java 21 para generar un archivo JSONL diario a partir del snapsho
 5. Lectura por lotes.
 6. Desencriptado de `dataMap`.
 7. Validacion de JSON.
-8. Generacion JSONL por bloques no confirmados.
-9. Publicacion del JSONL, manifiesto y cierre SQL.
+8. Generacion CSV por bloques no confirmados.
+9. Publicacion del CSV, manifiesto y cierre SQL.
 
-## Salida JSONL
+## Salida CSV
 
-El archivo final usa extension `.jsonl` y content type `application/x-ndjson; charset=utf-8`.
+El archivo final usa extension `.csv` y content type `text/csv; charset=utf-8`.
 
-Cada linea representa un registro completo:
+Columnas:
 
-```json
-{"id":1,"fileName":"archivo-demo-001.pdf","statusFile":1,"clientName":"Juan Perez","creationDateTime":"2026-07-17T10:30:00Z","dataMap":{"cliente":"Juan Perez","tipoDocumento":"DNI"},"listaTables":{"tables":["tabla_demo"]},"documentType":"DNI","uniqueHash":"..."}
+```csv
+id,fileName,statusFile,clientName,creationDateTime,dataMap,listaTables,documentType,uniqueHash
 ```
 
-Para Databricks:
+`dataMap` y `listaTables` se escriben como JSON compacto dentro de una columna CSV. Las comillas internas se escapan segun el formato CSV estandar.
 
-```python
-df = spark.read.json("abfss://<container>@<storage>.dfs.core.windows.net/estructuracion/businessDate=2026-07-17/*.jsonl")
-display(df)
+Ejemplo de una fila:
+
+```csv
+1,archivo-demo-001.pdf,1,Juan Perez,2026-07-17T10:30:00Z,"{""cliente"":""Juan Perez"",""tipoDocumento"":""DNI""}","{""tables"":[""tabla_demo""]}",DNI,abc123
 ```
 
 ## Configuracion local

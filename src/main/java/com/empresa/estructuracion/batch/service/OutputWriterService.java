@@ -5,5 +5,7 @@ import com.empresa.estructuracion.batch.model.StagingRecord;
 import java.security.MessageDigest;
 
 public interface OutputWriterService {
+    byte[] headerBytes(MessageDigest digest);
+
     byte[] rowBytes(StagingRecord record, String decryptedDataMap, MessageDigest digest);
 }

@@ -17,7 +17,8 @@ La unidad atómica es el **archivo completo**:
 - una ejecución procesa un snapshot completo;
 - una fila inválida impide publicar el archivo, salvo que el negocio acepte explícitamente archivos parciales;
 - una recuperación vuelve a generar el archivo desde el inicio del mismo snapshot;
-- staging no se elimina inmediatamente después del éxito.
+- staging se usa como tabla técnica de procesamiento y puede limpiarse al completar correctamente;
+- la auditoría mínima del corte queda en la tabla `ocrt.EstructuracionEjecucion`.
 
 ---
 
@@ -94,7 +95,7 @@ Esta regla evita ambigüedad operativa cuando el proceso se ejecuta después de 
 10. Confirma la lista de bloques para publicar el CSV final.
 11. Crea el manifiesto como señal de disponibilidad para el consumidor.
 12. Marca staging y ejecución como procesados.
-13. Conserva staging durante el periodo de retención.
+13. Limpia staging si la ejecución termina `Completed`; lo conserva si queda `Failed` o `Publishing`.
 
 ### Tamaños iniciales
 
@@ -247,6 +248,9 @@ CREATE TABLE ocrt.EstructuracionEjecucion
     cutoffFromUtc     DATETIME2(3) NOT NULL,
     cutoffToUtc       DATETIME2(3) NOT NULL,
     maxSourceId       INT NULL,
+    firstSourceId     INT NULL,
+    lastSourceId      INT NULL,
+    snapshotRecordCount BIGINT NULL,
 
     status            VARCHAR(20) NOT NULL,
     startedAt         DATETIME2(3) NOT NULL,
@@ -296,6 +300,14 @@ GO
 ```
 
 > Si la versión o política de SQL Server no admite el filtro anterior, utilizar `sp_getapplock` y una validación transaccional equivalente.
+
+Campos de auditoría del corte:
+
+- `firstSourceId`: menor `id` de `ocrt.Estructuracion` incluido en el snapshot.
+- `lastSourceId`: mayor `id` de `ocrt.Estructuracion` incluido en el snapshot.
+- `snapshotRecordCount`: cantidad de registros capturados para la ejecución.
+
+Estos campos permiten limpiar `ocrt.EstructuracionStaging` después de un cierre exitoso sin perder trazabilidad básica del rango procesado.
 
 Para usar `sp_getapplock`, construir el recurso de lock en una variable antes de ejecutar el procedimiento:
 
@@ -677,13 +689,14 @@ GO
 
 ### 6.10 Retención
 
-No borrar staging inmediatamente.
+`ocrt.EstructuracionStaging` es una tabla técnica de procesamiento, no la fuente principal de auditoría histórica.
 
 Política inicial sugerida:
 
-- `Processed`: 30 a 90 días;
-- `Failed`: hasta resolución;
-- ejecuciones con requisitos regulatorios: según política corporativa.
+- `Completed`: eliminar staging de la ejecución después de cerrar SQL y publicar manifiesto;
+- `Failed`: conservar staging para permitir recuperación técnica del mismo snapshot;
+- `Publishing`: conservar staging hasta completar reconciliación Storage/SQL;
+- auditoría histórica: conservar cabecera en `ocrt.EstructuracionEjecucion` con `firstSourceId`, `lastSourceId`, `snapshotRecordCount`, archivo, hash y estado.
 
 Ejemplo:
 
@@ -693,7 +706,7 @@ FROM ocrt.EstructuracionStaging s
 INNER JOIN ocrt.EstructuracionEjecucion e
         ON e.executionId = s.executionId
 WHERE e.status = 'Completed'
-  AND e.finishedAt < DATEADD(DAY, -30, SYSUTCDATETIME());
+  AND e.executionId = @ExecutionId;
 ```
 
 ---
@@ -1467,6 +1480,8 @@ America/Lima
 Variables mínimas:
 
 ```text
+AzureWebJobsStorage=...
+FUNCTIONS_WORKER_RUNTIME=java
 BATCH_TIMER_CRON=0 10 0 * * *
 BATCH_ZONE_ID=America/Lima
 BATCH_SQL_CONNECTION_STRING=...
@@ -1480,6 +1495,31 @@ BATCH_KEY_VAULT_URL=...
 BATCH_RSA_KEY_NAME=...
 BATCH_WRAPPED_AES_SECRET_NAME=...
 ```
+
+### 11.5.1 Catálogo de variables de entorno
+
+| Variable | Obligatoria | Valor inicial / ejemplo | Uso |
+|---|---:|---|---|
+| `AzureWebJobsStorage` | Sí | `UseDevelopmentStorage=true` en local o connection string de Storage en Azure | Requerida por Azure Functions para runtime, locks internos y triggers. |
+| `FUNCTIONS_WORKER_RUNTIME` | Sí | `java` | Indica al host de Azure Functions que debe usar worker Java. |
+| `BATCH_TIMER_CRON` | Sí | `0 10 0 * * *` | Programación del Timer Trigger. Para 00:10 diaria. |
+| `BATCH_ZONE_ID` | No | `America/Lima` | Zona horaria usada para calcular `businessDate` del día anterior. |
+| `BATCH_SQL_CONNECTION_STRING` | Sí | `jdbc:sqlserver://...` | Cadena JDBC hacia SQL Server. Debe administrarse como secreto. |
+| `BATCH_SQL_BATCH_SIZE` | No | `1000` | Tamaño de lote para leer staging por `sourceId`. |
+| `BATCH_SQL_STALE_MINUTES` | No | `15` | Minutos sin señal de vida para considerar recuperable una ejecución incompleta. |
+| `BATCH_SQL_MAX_ATTEMPTS` | No | `3` | Reservada para fase de reintentos controlados. En la primera fase queda documentada, pero no limita intentos. |
+| `BATCH_STORAGE_CONNECTION_STRING` | Sí | `DefaultEndpointsProtocol=...` | Cadena de conexión del Storage donde se publica el archivo y manifiesto. Debe administrarse como secreto. |
+| `BATCH_STORAGE_CONTAINER` | Sí | `exports` | Contenedor destino del archivo y manifiesto. |
+| `BATCH_STORAGE_BASE_PATH` | No | `estructuracion` | Prefijo lógico dentro del contenedor. |
+| `BATCH_KEY_VAULT_URL` | Sí | `https://kv-estruct-batch-dev.vault.azure.net/` | URL del Key Vault que contiene la RSA y el secret de AES envuelta. |
+| `BATCH_RSA_KEY_NAME` | Sí | `rsa-estruct-batch-key` | Nombre de la clave RSA usada para desenvolver la AES. |
+| `BATCH_WRAPPED_AES_SECRET_NAME` | Sí | `wrapped-aes-key` | Nombre del secret que contiene la AES envuelta en Base64. |
+
+Notas de seguridad:
+
+- Ninguna variable con credenciales debe quedar en repositorio.
+- `local.settings.json` debe mantenerse excluido de Git.
+- En Azure, preferir App Settings referenciando Key Vault o Managed Identity cuando aplique.
 
 ### 11.6 SQL Server
 
@@ -1701,7 +1741,7 @@ Como arquitectura batch, la solución recomendada es:
 - archivo tratado como unidad atómica;
 - una fila inválida impide publicar;
 - publicación mediante block blob y condición de no sobrescritura;
-- staging retenido por un periodo definido;
+- staging limpiado al completar correctamente y conservado para `Failed`/`Publishing`;
 - clave AES desenvuelta una sola vez;
 - lotes pequeños y memoria limitada por bytes.
 

@@ -39,15 +39,16 @@ public class EstructuracionBatchService {
 
     public EstructuracionBatchService(
             BatchProperties properties,
-            EstructuracionBatchDependencies dependencies) {
+            EstructuracionBatchRepositories repositories,
+            EstructuracionBatchServices services) {
         this.properties = properties;
-        this.executionRepository = dependencies.executionRepository();
-        this.stagingRepository = dependencies.stagingRepository();
-        this.cryptoService = dependencies.cryptoService();
-        this.outputWriterService = dependencies.outputWriterService();
-        this.blobStorageService = dependencies.storagePublisherService();
-        this.manifestService = dependencies.manifestWriterService();
-        this.telemetryService = dependencies.telemetryService();
+        this.executionRepository = repositories.executionRepository();
+        this.stagingRepository = repositories.stagingRepository();
+        this.cryptoService = services.cryptoService();
+        this.outputWriterService = services.outputWriterService();
+        this.blobStorageService = services.storagePublisherService();
+        this.manifestService = services.manifestWriterService();
+        this.telemetryService = services.telemetryService();
     }
 
     public void execute(Logger logger) {

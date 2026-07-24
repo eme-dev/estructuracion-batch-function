@@ -2,8 +2,9 @@ package com.empresa.estructuracion.batch.config;
 
 import com.empresa.estructuracion.batch.repository.ExecutionRepository;
 import com.empresa.estructuracion.batch.repository.StagingRepository;
-import com.empresa.estructuracion.batch.service.EstructuracionBatchDependencies;
+import com.empresa.estructuracion.batch.service.EstructuracionBatchRepositories;
 import com.empresa.estructuracion.batch.service.EstructuracionBatchService;
+import com.empresa.estructuracion.batch.service.EstructuracionBatchServices;
 import com.empresa.estructuracion.batch.repository.impl.SqlExecutionRepository;
 import com.empresa.estructuracion.batch.repository.impl.SqlStagingRepository;
 import com.empresa.estructuracion.batch.service.impl.BlobStorageService;
@@ -26,18 +27,76 @@ public class DependencyConfig {
     }
 
     public static DependencyConfig fromEnvironment() {
-        ObjectMapper objectMapper = new ObjectMapper()
+        return new DependencyConfig(batchService());
+    }
+
+    public EstructuracionBatchService estructuracionBatchService() {
+        return estructuracionBatchService;
+    }
+
+    private static EstructuracionBatchService batchService() {
+        ObjectMapper objectMapper = objectMapper();
+        SqlConfig sqlConfig = sqlConfig();
+        StorageConfig storageConfig = storageConfig();
+        KeyVaultConfig keyVaultConfig = keyVaultConfig();
+        BatchProperties batchProperties = batchProperties(storageConfig, keyVaultConfig);
+        EstructuracionBatchRepositories repositories = repositories(sqlConfig);
+        EstructuracionBatchServices services = services(storageConfig, keyVaultConfig, objectMapper);
+
+        return new EstructuracionBatchService(batchProperties, repositories, services);
+    }
+
+    private static EstructuracionBatchRepositories repositories(SqlConfig sqlConfig) {
+        SqlConnectionProvider sqlConnectionProvider = new SqlConnectionProvider(sqlConfig);
+        ExecutionRepository executionRepository = new SqlExecutionRepository(sqlConnectionProvider);
+        StagingRepository stagingRepository = new SqlStagingRepository(sqlConnectionProvider);
+
+        return new EstructuracionBatchRepositories(executionRepository, stagingRepository);
+    }
+
+    private static EstructuracionBatchServices services(
+            StorageConfig storageConfig,
+            KeyVaultConfig keyVaultConfig,
+            ObjectMapper objectMapper) {
+        CryptoService cryptoService = new CryptoService(keyVaultConfig, objectMapper);
+        CsvGenerationService csvGenerationService = new CsvGenerationService(objectMapper);
+        BlobStorageService blobStorageService = new BlobStorageService(storageConfig);
+        ManifestService manifestService = new ManifestService(objectMapper);
+        TelemetryService telemetryService = new TelemetryService();
+
+        return new EstructuracionBatchServices(
+                cryptoService,
+                csvGenerationService,
+                blobStorageService,
+                manifestService,
+                telemetryService);
+    }
+
+    private static ObjectMapper objectMapper() {
+        return new ObjectMapper()
                 .registerModule(new JavaTimeModule())
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        SqlConfig sqlConfig = new SqlConfig(required("BATCH_SQL_CONNECTION_STRING"));
-        StorageConfig storageConfig = new StorageConfig(
+    }
+
+    private static SqlConfig sqlConfig() {
+        return new SqlConfig(required("BATCH_SQL_CONNECTION_STRING"));
+    }
+
+    private static StorageConfig storageConfig() {
+        return new StorageConfig(
                 required("BATCH_STORAGE_CONNECTION_STRING"),
                 required("BATCH_STORAGE_CONTAINER"));
-        KeyVaultConfig keyVaultConfig = new KeyVaultConfig(
+    }
+
+    private static KeyVaultConfig keyVaultConfig() {
+        return new KeyVaultConfig(
                 required("BATCH_KEY_VAULT_URL"),
                 required("BATCH_RSA_KEY_NAME"),
                 required("BATCH_WRAPPED_AES_SECRET_NAME"));
-        BatchProperties batchProperties = new BatchProperties(
+    }
+
+    private static BatchProperties batchProperties(StorageConfig storageConfig, KeyVaultConfig keyVaultConfig) {
+        return new BatchProperties(
                 ZoneId.of(optional("BATCH_ZONE_ID", "America/Lima")),
                 integer("BATCH_SQL_BATCH_SIZE", 1000),
                 integer("BATCH_SQL_STALE_MINUTES", 15),
@@ -47,33 +106,6 @@ public class DependencyConfig {
                 keyVaultConfig.vaultUrl(),
                 keyVaultConfig.rsaKeyName(),
                 keyVaultConfig.wrappedAesSecretName());
-
-        SqlConnectionProvider sqlConnectionProvider = new SqlConnectionProvider(sqlConfig);
-        ExecutionRepository executionRepository = new SqlExecutionRepository(sqlConnectionProvider);
-        StagingRepository stagingRepository = new SqlStagingRepository(sqlConnectionProvider);
-        CryptoService cryptoService = new CryptoService(keyVaultConfig, objectMapper);
-        CsvGenerationService csvGenerationService = new CsvGenerationService(objectMapper);
-        BlobStorageService blobStorageService = new BlobStorageService(storageConfig);
-        ManifestService manifestService = new ManifestService(objectMapper);
-        TelemetryService telemetryService = new TelemetryService();
-
-        EstructuracionBatchDependencies dependencies = new EstructuracionBatchDependencies(
-                executionRepository,
-                stagingRepository,
-                cryptoService,
-                csvGenerationService,
-                blobStorageService,
-                manifestService,
-                telemetryService);
-        EstructuracionBatchService estructuracionBatchService = new EstructuracionBatchService(
-                batchProperties,
-                dependencies);
-
-        return new DependencyConfig(estructuracionBatchService);
-    }
-
-    public EstructuracionBatchService estructuracionBatchService() {
-        return estructuracionBatchService;
     }
 
     private static String required(String name) {

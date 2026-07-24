@@ -10,11 +10,9 @@ public final class FileNameUtils {
     private FileNameUtils() {
     }
 
-    public static String outputPath(String basePath, ExecutionContext execution) {
-        String date = execution.businessDate().format(DateTimeFormatter.ISO_DATE);
+    public static String outputPath(ExecutionContext execution) {
         String yyyymmdd = execution.businessDate().format(BASIC_DATE);
-        return "%s/businessDate=%s/estructuracion_%s_%s.csv"
-                .formatted(basePath, date, yyyymmdd, execution.executionId());
+        return "estructuracion_%s_%s.csv".formatted(yyyymmdd, execution.executionId());
     }
 
 }

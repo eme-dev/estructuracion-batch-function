@@ -10,7 +10,8 @@ END;
 GO
 
 CREATE OR ALTER PROCEDURE ocrt.usp_FindRecoverableEstructuracionExecution
-    @StaleMinutes INT
+    @StaleMinutes INT,
+    @Now DATETIME2(3)
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -29,7 +30,7 @@ BEGIN
       AND
       (
           status = 'Failed'
-          OR heartbeatAt < DATEADD(MINUTE, -@StaleMinutes, SYSUTCDATETIME())
+          OR heartbeatAt < DATEADD(MINUTE, -@StaleMinutes, @Now)
           OR heartbeatAt IS NULL
       )
     ORDER BY startedAt;
@@ -40,7 +41,8 @@ CREATE OR ALTER PROCEDURE ocrt.usp_CreateEstructuracionExecutionSnapshot
     @ExecutionId UNIQUEIDENTIFIER,
     @BusinessDate DATE,
     @CutoffFromUtc DATETIME2(3),
-    @CutoffToUtc DATETIME2(3)
+    @CutoffToUtc DATETIME2(3),
+    @Now DATETIME2(3)
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -88,8 +90,8 @@ BEGIN
         @CutoffToUtc,
         NULL,
         'Preparing',
-        SYSUTCDATETIME(),
-        SYSUTCDATETIME(),
+        @Now,
+        @Now,
         1
     );
 
@@ -164,7 +166,8 @@ END;
 GO
 
 CREATE OR ALTER PROCEDURE ocrt.usp_MarkEstructuracionInProgress
-    @ExecutionId UNIQUEIDENTIFIER
+    @ExecutionId UNIQUEIDENTIFIER,
+    @Now DATETIME2(3)
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -172,7 +175,7 @@ BEGIN
     UPDATE ocrt.EstructuracionEjecucion
        SET status = 'InProgress',
            finishedAt = NULL,
-           heartbeatAt = SYSUTCDATETIME(),
+           heartbeatAt = @Now,
            errorMessage = NULL
      WHERE executionId = @ExecutionId
        AND status IN ('Preparing', 'InProgress', 'Failed');
@@ -183,27 +186,29 @@ END;
 GO
 
 CREATE OR ALTER PROCEDURE ocrt.usp_UpdateEstructuracionHeartbeat
-    @ExecutionId UNIQUEIDENTIFIER
+    @ExecutionId UNIQUEIDENTIFIER,
+    @Now DATETIME2(3)
 AS
 BEGIN
     SET NOCOUNT ON;
 
     UPDATE ocrt.EstructuracionEjecucion
-       SET heartbeatAt = SYSUTCDATETIME()
+       SET heartbeatAt = @Now
      WHERE executionId = @ExecutionId
        AND status = 'InProgress';
 END;
 GO
 
 CREATE OR ALTER PROCEDURE ocrt.usp_MarkEstructuracionPublishing
-    @ExecutionId UNIQUEIDENTIFIER
+    @ExecutionId UNIQUEIDENTIFIER,
+    @Now DATETIME2(3)
 AS
 BEGIN
     SET NOCOUNT ON;
 
     UPDATE ocrt.EstructuracionEjecucion
        SET status = 'Publishing',
-           heartbeatAt = SYSUTCDATETIME()
+           heartbeatAt = @Now
      WHERE executionId = @ExecutionId
        AND status = 'InProgress';
 
@@ -255,7 +260,8 @@ CREATE OR ALTER PROCEDURE ocrt.usp_CompleteEstructuracionExecution
     @FileName NVARCHAR(500),
     @FileHash BINARY(32),
     @RecordCount BIGINT,
-    @ContentLength BIGINT
+    @ContentLength BIGINT,
+    @Now DATETIME2(3)
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -265,8 +271,8 @@ BEGIN
 
     UPDATE ocrt.EstructuracionEjecucion
        SET status = 'Completed',
-           finishedAt = SYSUTCDATETIME(),
-           heartbeatAt = SYSUTCDATETIME(),
+           finishedAt = @Now,
+           heartbeatAt = @Now,
            fileName = @FileName,
            fileHash = @FileHash,
            recordCount = @RecordCount,
@@ -285,15 +291,16 @@ GO
 CREATE OR ALTER PROCEDURE ocrt.usp_FailEstructuracionExecution
     @ExecutionId UNIQUEIDENTIFIER,
     @ErrorCode NVARCHAR(100),
-    @ErrorMessage NVARCHAR(2000)
+    @ErrorMessage NVARCHAR(2000),
+    @Now DATETIME2(3)
 AS
 BEGIN
     SET NOCOUNT ON;
 
     UPDATE ocrt.EstructuracionEjecucion
        SET status = 'Failed',
-           finishedAt = SYSUTCDATETIME(),
-           heartbeatAt = SYSUTCDATETIME(),
+           finishedAt = @Now,
+           heartbeatAt = @Now,
            errorMessage = CONCAT(@ErrorCode, ': ', @ErrorMessage)
      WHERE executionId = @ExecutionId
        AND status IN ('Preparing', 'InProgress', 'Publishing');

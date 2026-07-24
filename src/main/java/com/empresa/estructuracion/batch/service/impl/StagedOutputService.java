@@ -16,6 +16,7 @@ import com.empresa.estructuracion.batch.util.HashUtils;
 
 import java.io.ByteArrayOutputStream;
 import java.security.MessageDigest;
+import java.time.LocalDateTime;
 import java.util.List;
 
 public class StagedOutputService implements OutputService {
@@ -54,7 +55,7 @@ public class StagedOutputService implements OutputService {
     }
 
     private BatchResult generate(ExecutionContext execution, byte[] aesKey) {
-        String outputName = FileNameUtils.outputPath(properties.storageBasePath(), execution);
+        String outputName = FileNameUtils.outputPath(execution);
         PublicationSession publicationSession = storagePublisherService.beginPublication();
         MessageDigest digest = HashUtils.sha256();
         long contentLength = 0;
@@ -90,7 +91,7 @@ public class StagedOutputService implements OutputService {
             }
 
             storagePublisherService.stageBlock(publicationSession, outputName, ++blockNumber, block.toByteArray());
-            executionRepository.updateHeartbeat(execution.executionId());
+            executionRepository.updateHeartbeat(execution.executionId(), now());
         }
 
         if (!headerWritten) {
@@ -106,5 +107,9 @@ public class StagedOutputService implements OutputService {
                 recordCount,
                 contentLength,
                 digest.digest());
+    }
+
+    private LocalDateTime now() {
+        return LocalDateTime.now(properties.zoneId());
     }
 }

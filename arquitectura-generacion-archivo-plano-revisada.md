@@ -449,7 +449,7 @@ WHERE status IN ('Preparing', 'InProgress', 'Publishing', 'Failed')
   AND
   (
       status = 'Failed'
-      OR heartbeatAt < DATEADD(MINUTE, -@StaleMinutes, SYSUTCDATETIME())
+      OR heartbeatAt < DATEADD(MINUTE, -@StaleMinutes, @Now)
   )
 ORDER BY startedAt;
 ```
@@ -603,7 +603,7 @@ Actualizar después de cada lote:
 
 ```sql
 UPDATE ocrt.EstructuracionEjecucion
-SET heartbeatAt = SYSUTCDATETIME()
+SET heartbeatAt = @Now
 WHERE executionId = @ExecutionId
   AND status = 'InProgress';
 ```
@@ -615,7 +615,7 @@ Antes de confirmar el archivo:
 ```sql
 UPDATE ocrt.EstructuracionEjecucion
 SET status = 'Publishing',
-    heartbeatAt = SYSUTCDATETIME()
+    heartbeatAt = @Now
 WHERE executionId = @ExecutionId
   AND status = 'InProgress';
 ```
@@ -646,8 +646,8 @@ BEGIN
 
     UPDATE ocrt.EstructuracionEjecucion
        SET status = 'Completed',
-           finishedAt = SYSUTCDATETIME(),
-           heartbeatAt = SYSUTCDATETIME(),
+           finishedAt = @Now,
+           heartbeatAt = @Now,
            fileName = @FileName,
            fileHash = @FileHash,
            recordCount = @RecordCount,
@@ -736,7 +736,6 @@ El consumidor debe considerar disponible el archivo únicamente cuando `ocrt.Est
 ### Nombre recomendado
 
 ```text
-exports/estructuracion/businessDate=YYYY-MM-DD/
 estructuracion_YYYYMMDD_{executionId}.csv
 ```
 
@@ -1285,7 +1284,6 @@ Variables resultantes para `dev`:
 
 ```text
 BATCH_STORAGE_CONTAINER=exports
-BATCH_STORAGE_BASE_PATH=estructuracion
 BATCH_KEY_VAULT_URL=https://kv-estruct-batch-dev.vault.azure.net/
 BATCH_RSA_KEY_NAME=rsa-estruct-batch-key
 BATCH_WRAPPED_AES_SECRET_NAME=wrapped-aes-key
@@ -1301,28 +1299,20 @@ Pasos:
 2. Crear un contenedor dedicado, por ejemplo `exports`.
 3. Deshabilitar acceso público al contenedor.
 4. Habilitar cifrado en reposo nativo de Storage.
-5. Definir la ruta base del batch:
+5. Confirmar convención final de salida en la raíz del contenedor:
 
 ```text
-estructuracion/
-```
-
-6. Confirmar convención final de salida:
-
-```text
-exports/estructuracion/businessDate=YYYY-MM-DD/
 estructuracion_YYYYMMDD_{executionId}.csv
 ```
 
-7. Configurar permisos para que la Azure Function pueda escribir blobs y leer propiedades.
-8. Confirmar política de retención, lifecycle management o limpieza de archivos antiguos si aplica.
+6. Configurar permisos para que la Azure Function pueda escribir blobs y leer propiedades.
+7. Confirmar política de retención, lifecycle management o limpieza de archivos antiguos si aplica.
 
 Variables asociadas:
 
 ```text
 BATCH_STORAGE_CONNECTION_STRING
 BATCH_STORAGE_CONTAINER=exports
-BATCH_STORAGE_BASE_PATH=estructuracion
 ```
 
 ### 11.3 Azure Key Vault
@@ -1424,6 +1414,8 @@ Pasos:
 America/Lima
 ```
 
+Los campos técnicos `startedAt`, `finishedAt` y `heartbeatAt` se guardan como `DATETIME2(3)` con la hora local calculada por la Function usando `BATCH_ZONE_ID`. SQL Server no calcula la zona horaria; recibe el valor mediante el parámetro `@Now`.
+
 4. Usar un plan compatible con duración, memoria, red y volumen esperado.
 5. Configurar Application Insights.
 6. Configurar variables de entorno.
@@ -1443,7 +1435,6 @@ BATCH_SQL_STALE_MINUTES=15
 BATCH_SQL_MAX_ATTEMPTS=3
 BATCH_STORAGE_CONNECTION_STRING=...
 BATCH_STORAGE_CONTAINER=exports
-BATCH_STORAGE_BASE_PATH=estructuracion
 BATCH_KEY_VAULT_URL=...
 BATCH_RSA_KEY_NAME=...
 BATCH_WRAPPED_AES_SECRET_NAME=...
@@ -1463,7 +1454,6 @@ BATCH_WRAPPED_AES_SECRET_NAME=...
 | `BATCH_SQL_MAX_ATTEMPTS` | No | `3` | Reservada para fase de reintentos controlados. En la primera fase queda documentada, pero no limita intentos. |
 | `BATCH_STORAGE_CONNECTION_STRING` | Sí | `DefaultEndpointsProtocol=...` | Cadena de conexión del Storage donde se publica el archivo. Debe administrarse como secreto. |
 | `BATCH_STORAGE_CONTAINER` | Sí | `exports` | Contenedor destino del archivo. |
-| `BATCH_STORAGE_BASE_PATH` | No | `estructuracion` | Prefijo lógico dentro del contenedor. |
 | `BATCH_KEY_VAULT_URL` | Sí | `https://kv-estruct-batch-dev.vault.azure.net/` | URL del Key Vault que contiene la RSA y el secret de AES envuelta. |
 | `BATCH_RSA_KEY_NAME` | Sí | `rsa-estruct-batch-key` | Nombre de la clave RSA usada para desenvolver la AES. |
 | `BATCH_WRAPPED_AES_SECRET_NAME` | Sí | `wrapped-aes-key` | Nombre del secret que contiene la AES envuelta en Base64. |

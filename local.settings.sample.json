@@ -11,7 +11,6 @@
     "BATCH_SQL_BATCH_SIZE": "1000",
     "BATCH_STORAGE_CONNECTION_STRING": "DefaultEndpointsProtocol=https;AccountName=...;AccountKey=...;EndpointSuffix=core.windows.net",
     "BATCH_STORAGE_CONTAINER": "exports",
-    "BATCH_STORAGE_BASE_PATH": "estructuracion",
     "BATCH_KEY_VAULT_URL": "https://kv-estruct-batch-dev.vault.azure.net/",
     "BATCH_RSA_KEY_NAME": "rsa-estruct-batch-key",
     "BATCH_WRAPPED_AES_SECRET_NAME": "wrapped-aes-key"

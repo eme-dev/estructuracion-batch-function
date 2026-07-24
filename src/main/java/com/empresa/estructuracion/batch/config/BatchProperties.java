@@ -8,9 +8,7 @@ public record BatchProperties(
         int staleMinutes,
         int maxAttempts,
         String storageContainer,
-        String storageBasePath,
         String keyVaultUrl,
         String rsaKeyName,
         String wrappedAesSecretName) {
 }
-

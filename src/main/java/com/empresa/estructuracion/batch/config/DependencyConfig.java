@@ -113,7 +113,6 @@ public class DependencyConfig {
                 integer("BATCH_SQL_STALE_MINUTES", 15),
                 integer("BATCH_SQL_MAX_ATTEMPTS", 3),
                 storageConfig.containerName(),
-                optional("BATCH_STORAGE_BASE_PATH", "estructuracion"),
                 keyVaultConfig.vaultUrl(),
                 keyVaultConfig.rsaKeyName(),
                 keyVaultConfig.wrappedAesSecretName());

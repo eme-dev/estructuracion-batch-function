@@ -11,6 +11,7 @@ import com.empresa.estructuracion.batch.repository.ExecutionRepository;
 import com.empresa.estructuracion.batch.util.BusinessDateCalculator;
 
 import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.logging.Logger;
@@ -40,7 +41,7 @@ public class EstructuracionBatchService {
                     Clock.systemUTC(),
                     properties.zoneId());
             Optional<ExecutionContext> recoverable =
-                    executionRepository.findRecoverableExecution(properties.staleMinutes());
+                    executionRepository.findRecoverableExecution(properties.staleMinutes(), now());
             if (recoverable.isPresent()) {
                 execution = recoverable.get();
                 if (execution.status() == ExecutionStatus.PUBLISHING) {
@@ -49,18 +50,18 @@ public class EstructuracionBatchService {
                 }
                 logger.info("Recoverable execution found. Reusing executionId=" + execution.executionId());
             } else {
-                execution = executionRepository.createExecutionWithSnapshot(cutoff);
+                execution = executionRepository.createExecutionWithSnapshot(cutoff, now());
             }
 
-            executionRepository.markInProgress(execution.executionId());
+            executionRepository.markInProgress(execution.executionId(), now());
             telemetryService.trackBatchStarted(logger, execution);
 
             BatchResult result = outputService.generate(execution);
 
-            executionRepository.markPublishing(execution.executionId());
+            executionRepository.markPublishing(execution.executionId(), now());
             blobStorageService.commitBlocks(result.publicationSession(), result.fileName());
 
-            executionRepository.complete(result);
+            executionRepository.complete(result, now());
             telemetryService.trackBatchCompleted(logger, result);
         } catch (RuntimeException ex) {
             handleFailure(logger, execution == null ? null : execution.executionId(), ex);
@@ -71,7 +72,7 @@ public class EstructuracionBatchService {
     private void handleFailure(Logger logger, UUID executionId, Exception ex) {
         String sanitized = sanitizeFailureMessage(ex);
         if (executionId != null && !(ex instanceof StorageReconciliationRequiredException)) {
-            executionRepository.fail(executionId, ex.getClass().getSimpleName(), sanitized);
+            executionRepository.fail(executionId, ex.getClass().getSimpleName(), sanitized, now());
         }
         telemetryService.trackBatchFailed(logger, new BatchError(
                 executionId,
@@ -82,5 +83,9 @@ public class EstructuracionBatchService {
 
     private String sanitizeFailureMessage(Exception ex) {
         return ex.getClass().getSimpleName();
+    }
+
+    private LocalDateTime now() {
+        return LocalDateTime.now(properties.zoneId());
     }
 }

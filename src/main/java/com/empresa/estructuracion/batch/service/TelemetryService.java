@@ -6,11 +6,10 @@ import com.empresa.estructuracion.batch.model.ExecutionContext;
 
 import java.util.logging.Logger;
 
-public interface BatchTelemetryService {
+public interface TelemetryService {
     void trackBatchStarted(Logger logger, ExecutionContext execution);
 
     void trackBatchCompleted(Logger logger, BatchResult result);
 
     void trackBatchFailed(Logger logger, BatchError error);
 }
-

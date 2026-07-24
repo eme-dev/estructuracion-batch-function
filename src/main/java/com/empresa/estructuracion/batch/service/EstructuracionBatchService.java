@@ -8,19 +8,12 @@ import com.empresa.estructuracion.batch.model.BusinessDateCutoff;
 import com.empresa.estructuracion.batch.model.ExecutionContext;
 import com.empresa.estructuracion.batch.model.ExecutionStatus;
 import com.empresa.estructuracion.batch.model.Manifest;
-import com.empresa.estructuracion.batch.model.PublicationSession;
-import com.empresa.estructuracion.batch.model.StagingRecord;
 import com.empresa.estructuracion.batch.repository.ExecutionRepository;
-import com.empresa.estructuracion.batch.repository.StagingRepository;
 import com.empresa.estructuracion.batch.util.BusinessDateCalculator;
-import com.empresa.estructuracion.batch.util.FileNameUtils;
 import com.empresa.estructuracion.batch.util.HashUtils;
 
-import java.io.ByteArrayOutputStream;
-import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.logging.Logger;
@@ -30,12 +23,10 @@ public class EstructuracionBatchService {
 
     private final BatchProperties properties;
     private final ExecutionRepository executionRepository;
-    private final StagingRepository stagingRepository;
-    private final DataMapCryptoService cryptoService;
-    private final OutputWriterService outputWriterService;
+    private final OutputService outputService;
     private final StoragePublisherService blobStorageService;
     private final ManifestWriterService manifestService;
-    private final BatchTelemetryService telemetryService;
+    private final TelemetryService telemetryService;
 
     public EstructuracionBatchService(
             BatchProperties properties,
@@ -43,9 +34,7 @@ public class EstructuracionBatchService {
             EstructuracionBatchServices services) {
         this.properties = properties;
         this.executionRepository = repositories.executionRepository();
-        this.stagingRepository = repositories.stagingRepository();
-        this.cryptoService = services.cryptoService();
-        this.outputWriterService = services.outputWriterService();
+        this.outputService = services.outputService();
         this.blobStorageService = services.storagePublisherService();
         this.manifestService = services.manifestWriterService();
         this.telemetryService = services.telemetryService();
@@ -53,7 +42,6 @@ public class EstructuracionBatchService {
 
     public void execute(Logger logger) {
         ExecutionContext execution = null;
-        byte[] aesKey = null;
         try {
             BusinessDateCutoff cutoff = BusinessDateCalculator.previousBusinessDate(
                     Clock.systemUTC(),
@@ -74,15 +62,10 @@ public class EstructuracionBatchService {
             executionRepository.markInProgress(execution.executionId());
             telemetryService.trackBatchStarted(logger, execution);
 
-            aesKey = cryptoService.unwrapAesKey();
-            BatchResult result = generateAndPublishOutput(execution, aesKey);
+            BatchResult result = outputService.generate(execution);
 
             executionRepository.markPublishing(execution.executionId());
-            if (result.contentLength() == 0) {
-                blobStorageService.uploadEmptyBlob(result.fileName());
-            } else {
-                blobStorageService.commitBlocks(result.publicationSession(), result.fileName());
-            }
+            blobStorageService.commitBlocks(result.publicationSession(), result.fileName());
 
             Manifest manifest = new Manifest(
                     execution.executionId(),
@@ -98,66 +81,7 @@ public class EstructuracionBatchService {
         } catch (RuntimeException ex) {
             handleFailure(logger, execution == null ? null : execution.executionId(), ex);
             throw ex;
-        } finally {
-            cryptoService.clearKey(aesKey);
         }
-    }
-
-    private BatchResult generateAndPublishOutput(ExecutionContext execution, byte[] aesKey) {
-        String outputName = FileNameUtils.outputPath(properties.storageBasePath(), execution);
-        String manifestName = FileNameUtils.manifestPath(outputName);
-        PublicationSession publicationSession = blobStorageService.beginPublication();
-        MessageDigest digest = HashUtils.sha256();
-        long contentLength = 0;
-        long recordCount = 0;
-        int blockNumber = 0;
-        int lastSourceId = 0;
-        boolean headerWritten = false;
-
-        while (true) {
-            List<StagingRecord> records = stagingRepository.readBatch(
-                    execution.executionId(),
-                    lastSourceId,
-                    properties.batchSize());
-            if (records.isEmpty()) {
-                break;
-            }
-
-            ByteArrayOutputStream block = new ByteArrayOutputStream();
-            if (!headerWritten) {
-                byte[] header = outputWriterService.headerBytes(digest);
-                block.writeBytes(header);
-                contentLength += header.length;
-                headerWritten = true;
-            }
-
-            for (StagingRecord record : records) {
-                String decryptedDataMap = cryptoService.decryptDataMap(record.encryptedDataMap(), aesKey);
-                byte[] row = outputWriterService.rowBytes(record, decryptedDataMap, digest);
-                block.writeBytes(row);
-                contentLength += row.length;
-                recordCount++;
-                lastSourceId = record.sourceId();
-            }
-
-            blobStorageService.stageBlock(publicationSession, outputName, ++blockNumber, block.toByteArray());
-            executionRepository.updateHeartbeat(execution.executionId());
-        }
-
-        if (!headerWritten) {
-            byte[] header = outputWriterService.headerBytes(digest);
-            blobStorageService.stageBlock(publicationSession, outputName, ++blockNumber, header);
-            contentLength += header.length;
-        }
-
-        return new BatchResult(
-                execution.executionId(),
-                outputName,
-                manifestName,
-                publicationSession,
-                recordCount,
-                contentLength,
-                digest.digest());
     }
 
     private void handleFailure(Logger logger, UUID executionId, Exception ex) {

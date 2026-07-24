@@ -63,6 +63,8 @@ BEGIN
     IF @LockResult < 0
         THROW 51001, 'No se pudo obtener lock aplicativo para businessDate.', 1;
 
+    DELETE FROM ocrt.EstructuracionStaging;
+
     INSERT INTO ocrt.EstructuracionEjecucion
     (
         executionId,
@@ -257,12 +259,6 @@ BEGIN
 
     IF @@ROWCOUNT = 0
         THROW 51004, 'La ejecucion no esta en Publishing.', 1;
-
-    UPDATE ocrt.EstructuracionStaging
-       SET processingStatus = 'Processed',
-           errorMessage = NULL
-     WHERE executionId = @ExecutionId
-       AND processingStatus = 'Pending';
 
     COMMIT TRANSACTION;
 END;

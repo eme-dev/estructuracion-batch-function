@@ -3,11 +3,11 @@ package com.empresa.estructuracion.batch.service.impl;
 import com.empresa.estructuracion.batch.model.BatchError;
 import com.empresa.estructuracion.batch.model.BatchResult;
 import com.empresa.estructuracion.batch.model.ExecutionContext;
-import com.empresa.estructuracion.batch.service.BatchTelemetryService;
+import com.empresa.estructuracion.batch.service.TelemetryService;
 
 import java.util.logging.Logger;
 
-public class TelemetryService implements BatchTelemetryService {
+public class DefaultTelemetryService implements TelemetryService {
     @Override
     public void trackBatchStarted(Logger logger, ExecutionContext execution) {
         logger.info("Batch started. executionId=" + execution.executionId());

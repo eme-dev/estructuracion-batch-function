@@ -10,8 +10,9 @@ import com.empresa.estructuracion.batch.repository.impl.SqlStagingRepository;
 import com.empresa.estructuracion.batch.service.impl.BlobStorageService;
 import com.empresa.estructuracion.batch.service.impl.CryptoService;
 import com.empresa.estructuracion.batch.service.impl.CsvGenerationService;
+import com.empresa.estructuracion.batch.service.impl.DefaultTelemetryService;
 import com.empresa.estructuracion.batch.service.impl.ManifestService;
-import com.empresa.estructuracion.batch.service.impl.TelemetryService;
+import com.empresa.estructuracion.batch.service.impl.StagedOutputService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -41,7 +42,12 @@ public class DependencyConfig {
         KeyVaultConfig keyVaultConfig = keyVaultConfig();
         BatchProperties batchProperties = batchProperties(storageConfig, keyVaultConfig);
         EstructuracionBatchRepositories repositories = repositories(sqlConfig);
-        EstructuracionBatchServices services = services(storageConfig, keyVaultConfig, objectMapper);
+        EstructuracionBatchServices services = services(
+                batchProperties,
+                repositories,
+                storageConfig,
+                keyVaultConfig,
+                objectMapper);
 
         return new EstructuracionBatchService(batchProperties, repositories, services);
     }
@@ -55,18 +61,26 @@ public class DependencyConfig {
     }
 
     private static EstructuracionBatchServices services(
+            BatchProperties batchProperties,
+            EstructuracionBatchRepositories repositories,
             StorageConfig storageConfig,
             KeyVaultConfig keyVaultConfig,
             ObjectMapper objectMapper) {
         CryptoService cryptoService = new CryptoService(keyVaultConfig, objectMapper);
         CsvGenerationService csvGenerationService = new CsvGenerationService(objectMapper);
         BlobStorageService blobStorageService = new BlobStorageService(storageConfig);
-        ManifestService manifestService = new ManifestService(objectMapper);
-        TelemetryService telemetryService = new TelemetryService();
-
-        return new EstructuracionBatchServices(
+        StagedOutputService outputService = new StagedOutputService(
+                batchProperties,
+                repositories.stagingRepository(),
+                repositories.executionRepository(),
                 cryptoService,
                 csvGenerationService,
+                blobStorageService);
+        ManifestService manifestService = new ManifestService(objectMapper);
+        DefaultTelemetryService telemetryService = new DefaultTelemetryService();
+
+        return new EstructuracionBatchServices(
+                outputService,
                 blobStorageService,
                 manifestService,
                 telemetryService);

@@ -1,9 +1,8 @@
 package com.empresa.estructuracion.batch.service;
 
 public record EstructuracionBatchServices(
-        DataMapCryptoService cryptoService,
-        OutputWriterService outputWriterService,
+        OutputService outputService,
         StoragePublisherService storagePublisherService,
         ManifestWriterService manifestWriterService,
-        BatchTelemetryService telemetryService) {
+        TelemetryService telemetryService) {
 }

@@ -17,7 +17,7 @@ La unidad atómica es el **archivo completo**:
 - una ejecución procesa un snapshot completo;
 - una fila inválida impide publicar el archivo, salvo que el negocio acepte explícitamente archivos parciales;
 - una recuperación vuelve a generar el archivo desde el inicio del mismo snapshot;
-- staging se usa como tabla técnica de procesamiento y puede limpiarse al completar correctamente;
+- staging se usa como tabla técnica de procesamiento y se limpia al iniciar una nueva foto sin ejecución recuperable;
 - la auditoría mínima del corte queda en la tabla `ocrt.EstructuracionEjecucion`.
 
 ---
@@ -86,6 +86,7 @@ Esta regla evita ambigüedad operativa cuando el proceso se ejecuta después de 
 4. Si no existe una ejecución recuperable:
    - crea una nueva cabecera;
    - captura un límite estable del corte;
+   - limpia staging porque iniciará una nueva foto;
    - copia los registros elegibles a staging.
 5. Obtiene y desenvuelve la clave AES una sola vez.
 6. Lee staging mediante paginación por `sourceId`.
@@ -94,8 +95,8 @@ Esta regla evita ambigüedad operativa cuando el proceso se ejecuta después de 
 9. Cambia la ejecución a `Publishing`.
 10. Confirma la lista de bloques para publicar el CSV final.
 11. Crea el manifiesto como señal de disponibilidad para el consumidor.
-12. Marca staging y ejecución como procesados.
-13. Limpia staging si la ejecución termina `Completed`; lo conserva si queda `Failed` o `Publishing`.
+12. Marca la ejecución como `Completed`.
+13. Staging queda disponible hasta que una nueva ejecución sin recuperable inicie una nueva foto.
 
 ### Tamaños iniciales
 
@@ -307,7 +308,7 @@ Campos de auditoría del corte:
 - `lastSourceId`: mayor `id` de `ocrt.Estructuracion` incluido en el snapshot.
 - `snapshotRecordCount`: cantidad de registros capturados para la ejecución.
 
-Estos campos permiten limpiar `ocrt.EstructuracionStaging` después de un cierre exitoso sin perder trazabilidad básica del rango procesado.
+Estos campos permiten limpiar `ocrt.EstructuracionStaging` al iniciar una nueva foto sin perder trazabilidad básica del rango procesado.
 
 Para usar `sp_getapplock`, construir el recurso de lock en una variable antes de ejecutar el procedimiento:
 
@@ -365,7 +366,6 @@ CREATE TABLE ocrt.EstructuracionStaging
             processingStatus IN
             (
                 'Pending',
-                'Processed',
                 'Failed'
             )
         )
@@ -397,7 +397,7 @@ GO
 - No se agrega estado `InProgress` por registro.
 - Los intentos pertenecen a la ejecución, no a cada fila.
 - Los conteos se obtienen desde staging.
-- Staging se conserva durante un periodo de retención.
+- Staging se conserva hasta que una nueva ejecución sin recuperable cargue una nueva foto.
 - La tabla principal no recibe columnas técnicas.
 
 ### 5.6 Modelo de datos
@@ -489,10 +489,11 @@ Reglas:
 2. Calcular `businessDate` como el día calendario anterior a la ejecución local de las 00:10.
 3. Calcular `cutoffFromLocal` y `cutoffToLocal` como intervalo semiabierto del `businessDate`; convertirlos a `cutoffFromUtc` y `cutoffToUtc` para guardar la cabecera y consultar SQL Server si `creationDateTime` está almacenado en UTC.
 4. Obtener un lock aplicativo.
-5. Insertar la cabecera en `Preparing`.
-6. Capturar `maxSourceId`.
-7. Crear el snapshot.
-8. Cambiar el estado a `InProgress`.
+5. Limpiar `ocrt.EstructuracionStaging` porque no se conserva historial en staging.
+6. Insertar la cabecera en `Preparing`.
+7. Capturar `maxSourceId`.
+8. Crear el snapshot.
+9. Cambiar el estado a `InProgress`.
 
 ### 6.3 Capturar un límite estable
 
@@ -507,6 +508,8 @@ WHERE creationDateTime >= @CutoffFromUtc
 El snapshot utiliza ese límite:
 
 ```sql
+DELETE FROM ocrt.EstructuracionStaging;
+
 INSERT INTO ocrt.EstructuracionStaging
 (
     executionId,
@@ -676,12 +679,6 @@ BEGIN
     IF @@ROWCOUNT = 0
         THROW 51000, 'La ejecución no está en Publishing.', 1;
 
-    UPDATE ocrt.EstructuracionStaging
-       SET processingStatus = 'Processed',
-           errorMessage = NULL
-     WHERE executionId = @ExecutionId
-       AND processingStatus = 'Pending';
-
     COMMIT TRANSACTION;
 END;
 GO
@@ -693,20 +690,15 @@ GO
 
 Política inicial sugerida:
 
-- `Completed`: eliminar staging de la ejecución después de cerrar SQL y publicar manifiesto;
-- `Failed`: conservar staging para permitir recuperación técnica del mismo snapshot;
-- `Publishing`: conservar staging hasta completar reconciliación Storage/SQL;
+- nueva ejecución sin recuperable: limpiar `ocrt.EstructuracionStaging` antes de cargar la nueva foto;
+- ejecución recuperable: conservar staging para reusar el mismo snapshot;
+- `Completed`, `Failed` o `Publishing`: no limpiar staging en el cierre de la ejecución;
 - auditoría histórica: conservar cabecera en `ocrt.EstructuracionEjecucion` con `firstSourceId`, `lastSourceId`, `snapshotRecordCount`, archivo, hash y estado.
 
 Ejemplo:
 
 ```sql
-DELETE s
-FROM ocrt.EstructuracionStaging s
-INNER JOIN ocrt.EstructuracionEjecucion e
-        ON e.executionId = s.executionId
-WHERE e.status = 'Completed'
-  AND e.executionId = @ExecutionId;
+DELETE FROM ocrt.EstructuracionStaging;
 ```
 
 ---
@@ -1679,7 +1671,7 @@ Antes de iniciar la programación, deben cerrarse los siguientes puntos para ase
 - Definir procedimiento para crear snapshot en staging.
 - Definir procedimiento para cambiar estado a `InProgress`.
 - Definir procedimiento para cambiar estado a `Publishing`.
-- Definir procedimiento para completar ejecución y marcar staging como `Processed`.
+- Definir procedimiento para completar ejecución sin limpiar staging.
 - Definir procedimiento para marcar ejecución como `Failed`.
 - Confirmar uso obligatorio de `sp_getapplock` para evitar doble ejecución por `businessDate`.
 - Confirmar índices necesarios sobre tabla origen, tabla de ejecución y staging.
@@ -1741,7 +1733,7 @@ Como arquitectura batch, la solución recomendada es:
 - archivo tratado como unidad atómica;
 - una fila inválida impide publicar;
 - publicación mediante block blob y condición de no sobrescritura;
-- staging limpiado al completar correctamente y conservado para `Failed`/`Publishing`;
+- staging limpiado solo al iniciar una nueva foto sin ejecución recuperable;
 - clave AES desenvuelta una sola vez;
 - lotes pequeños y memoria limitada por bytes.
 

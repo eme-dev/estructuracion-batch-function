@@ -135,7 +135,6 @@ CREATE TABLE ocrt.EstructuracionStaging
             processingStatus IN
             (
                 'Pending',
-                'Processed',
                 'Failed'
             )
         )

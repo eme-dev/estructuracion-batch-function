@@ -17,7 +17,4 @@ public final class FileNameUtils {
                 .formatted(basePath, date, yyyymmdd, execution.executionId());
     }
 
-    public static String manifestPath(String outputPath) {
-        return outputPath.replace(".csv", ".manifest.json");
-    }
 }

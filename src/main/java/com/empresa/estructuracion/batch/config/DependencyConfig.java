@@ -11,7 +11,6 @@ import com.empresa.estructuracion.batch.service.impl.BlobStorageService;
 import com.empresa.estructuracion.batch.service.impl.CryptoService;
 import com.empresa.estructuracion.batch.service.impl.CsvGenerationService;
 import com.empresa.estructuracion.batch.service.impl.DefaultTelemetryService;
-import com.empresa.estructuracion.batch.service.impl.ManifestService;
 import com.empresa.estructuracion.batch.service.impl.StagedOutputService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -76,13 +75,11 @@ public class DependencyConfig {
                 cryptoService,
                 csvGenerationService,
                 blobStorageService);
-        ManifestService manifestService = new ManifestService(objectMapper);
         DefaultTelemetryService telemetryService = new DefaultTelemetryService();
 
         return new EstructuracionBatchServices(
                 outputService,
                 blobStorageService,
-                manifestService,
                 telemetryService);
     }
 

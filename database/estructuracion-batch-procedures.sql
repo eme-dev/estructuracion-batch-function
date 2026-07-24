@@ -49,6 +49,9 @@ BEGIN
     DECLARE @LockResult INT;
     DECLARE @LockResource NVARCHAR(255);
     DECLARE @MaxSourceId INT;
+    DECLARE @FirstSourceId INT;
+    DECLARE @LastSourceId INT;
+    DECLARE @SnapshotRecordCount BIGINT;
 
     BEGIN TRANSACTION;
 
@@ -130,6 +133,19 @@ BEGIN
       AND e.creationDateTime >= @CutoffFromUtc
       AND e.creationDateTime <  @CutoffToUtc
     ORDER BY e.id;
+
+    SELECT
+        @FirstSourceId = MIN(sourceId),
+        @LastSourceId = MAX(sourceId),
+        @SnapshotRecordCount = COUNT_BIG(1)
+    FROM ocrt.EstructuracionStaging
+    WHERE executionId = @ExecutionId;
+
+    UPDATE ocrt.EstructuracionEjecucion
+       SET firstSourceId = @FirstSourceId,
+           lastSourceId = @LastSourceId,
+           snapshotRecordCount = @SnapshotRecordCount
+     WHERE executionId = @ExecutionId;
 
     SELECT
         executionId,
@@ -253,6 +269,8 @@ BEGIN
            heartbeatAt = SYSUTCDATETIME(),
            fileName = @FileName,
            fileHash = @FileHash,
+           recordCount = @RecordCount,
+           contentLength = @ContentLength,
            errorMessage = NULL
      WHERE executionId = @ExecutionId
        AND status = 'Publishing';

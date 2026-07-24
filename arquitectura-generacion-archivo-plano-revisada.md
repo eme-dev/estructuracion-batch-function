@@ -72,7 +72,7 @@ Esta regla evita ambigüedad operativa cuando el proceso se ejecuta después de 
 | Azure Function | Ejecutar el Timer Trigger diario, exponer un HTTP Trigger manual para pruebas controladas, recuperar ejecuciones incompletas, crear snapshots, obtener la clave AES, descifrar, validar, serializar, escribir bloques, confirmar el archivo y actualizar estados. |
 | SQL Server | Fuente de lectura, control de ejecuciones, snapshot staging, deduplicación, recuperación e idempotencia. |
 | Azure Key Vault | Custodiar la clave RSA y ejecutar el desenvolvimiento de la clave AES. |
-| Azure Storage Account | Recibir bloques no confirmados, publicar el blob final y almacenar el manifiesto. |
+| Azure Storage Account | Recibir bloques no confirmados y publicar el blob final. |
 | Application Insights | Métricas, trazas, dependencias y errores sanitizados. |
 
 ### Flujo general
@@ -94,8 +94,7 @@ Esta regla evita ambigüedad operativa cuando el proceso se ejecuta después de 
 8. Carga bloques no confirmados progresivamente sin cargar el archivo completo en memoria.
 9. Cambia la ejecución a `Publishing`.
 10. Confirma la lista de bloques para publicar el CSV final.
-11. Crea el manifiesto como señal de disponibilidad para el consumidor.
-12. Marca la ejecución como `Completed`.
+11. Marca la ejecución como `Completed` en SQL con archivo, hash, cantidad y tamaño.
 13. Staging queda disponible hasta que una nueva ejecución sin recuperable inicie una nueva foto.
 
 ### Tamaños iniciales
@@ -144,7 +143,7 @@ El límite real debe controlarse también por bytes, porque `dataMap` y `listaTa
 | RF-07 | Validar que `dataMap` desencriptado sea JSON válido. | Una fila con `dataMap` inválido impide confirmar el archivo. |
 | RF-08 | Generar el archivo progresivamente. | La memoria no crece con el total de registros. |
 | RF-09 | Confirmar el archivo de forma atómica. | El consumidor no observa contenido parcial. |
-| RF-10 | Crear un manifiesto. | Contiene `executionId`, conteo, tamaño y SHA-256. |
+| RF-10 | Registrar trazabilidad del archivo en SQL. | `EstructuracionEjecucion` conserva archivo, conteo, tamaño y SHA-256. |
 | RF-11 | Actualizar estados después de publicar. | Ninguna fila queda procesada si no existe archivo válido. |
 | RF-12 | Recuperar interrupciones. | Se reutilizan el mismo `executionId` y snapshot. |
 | RF-13 | Evitar duplicados. | `(executionId, sourceId)` y `(executionId, uniqueHash)` son únicos. |
@@ -251,7 +250,8 @@ CREATE TABLE ocrt.EstructuracionEjecucion
     maxSourceId       INT NULL,
     firstSourceId     INT NULL,
     lastSourceId      INT NULL,
-    snapshotRecordCount BIGINT NULL,
+    snapshotRecordCount BIGINT NOT NULL
+        CONSTRAINT DF_EstructuracionEjecucion_SnapshotRecordCount DEFAULT (0),
 
     status            VARCHAR(20) NOT NULL,
     startedAt         DATETIME2(3) NOT NULL,
@@ -263,6 +263,8 @@ CREATE TABLE ocrt.EstructuracionEjecucion
 
     fileName          NVARCHAR(500) NULL,
     fileHash          BINARY(32) NULL,
+    recordCount       BIGINT NULL,
+    contentLength     BIGINT NULL,
     errorMessage      NVARCHAR(2000) NULL,
 
     CONSTRAINT PK_EstructuracionEjecucion
@@ -454,7 +456,7 @@ ORDER BY startedAt;
 
 Reglas:
 
-- `Publishing` con blob y manifiesto válidos: completar SQL.
+- `Publishing` con blob válido: completar SQL.
 - `Preparing`, `InProgress` o `Failed` sin archivo válido: reiniciar el mismo snapshot.
 - No iniciar el nuevo corte mientras exista una ejecución recuperable.
 
@@ -624,8 +626,7 @@ Después:
 
 1. confirmar la lista de bloques;
 2. verificar propiedades;
-3. crear el manifiesto;
-4. ejecutar la actualización final de SQL.
+3. ejecutar la actualización final de SQL con archivo, conteo, tamaño y hash.
 
 ### 6.9 Confirmación final
 
@@ -633,7 +634,9 @@ Después:
 CREATE OR ALTER PROCEDURE ocrt.usp_CompleteEstructuracionExecution
     @ExecutionId UNIQUEIDENTIFIER,
     @FileName NVARCHAR(500),
-    @FileHash BINARY(32)
+    @FileHash BINARY(32),
+    @RecordCount BIGINT,
+    @ContentLength BIGINT
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -647,6 +650,8 @@ BEGIN
            heartbeatAt = SYSUTCDATETIME(),
            fileName = @FileName,
            fileHash = @FileHash,
+           recordCount = @RecordCount,
+           contentLength = @ContentLength,
            errorMessage = NULL
      WHERE executionId = @ExecutionId
        AND status = 'Publishing';
@@ -722,11 +727,11 @@ Usar un block blob con bloques no confirmados. El archivo final no debe quedar v
 3. conservar el ID del bloque;
 4. reutilizar el buffer;
 5. confirmar la lista completa al final mediante `CommitBlockList`;
-6. crear el manifiesto después de publicar el CSV.
+6. marcar la ejecución como `Completed` en SQL después de publicar el CSV.
 
 No construir una lista de 200 000 DTO ni un `StringBuilder` global.
 
-El consumidor debe considerar disponible el archivo únicamente cuando exista el manifiesto correspondiente y sus controles coincidan con el CSV publicado.
+El consumidor debe considerar disponible el archivo únicamente cuando `ocrt.EstructuracionEjecucion.status = 'Completed'` y los controles de SQL coincidan con el CSV publicado.
 
 ### Nombre recomendado
 
@@ -734,14 +739,6 @@ El consumidor debe considerar disponible el archivo únicamente cuando exista el
 exports/estructuracion/businessDate=YYYY-MM-DD/
 estructuracion_YYYYMMDD_{executionId}.csv
 ```
-
-Manifiesto:
-
-```text
-estructuracion_YYYYMMDD_{executionId}.manifest.json
-```
-
-El manifiesto funciona como señal de disponibilidad. Si el CSV existe pero el manifiesto no existe o no coincide, el archivo no debe ser consumido.
 
 ### Evitar sobrescritura
 
@@ -756,18 +753,19 @@ Si el blob ya existe:
 - mismo `executionId` y hash: tratar como reconciliación idempotente;
 - contenido diferente: fallar.
 
-### Manifiesto
+### Controles en SQL
 
-```json
-{
-  "executionId": "00000000-0000-0000-0000-000000000000",
-  "businessDate": "2026-07-15",
-  "recordCount": 200000,
-  "contentLength": 123456789,
-  "sha256": "base64-o-hex",
-  "contentType": "text/csv; charset=utf-8",
-  "generatedAtUtc": "2026-07-16T05:00:00Z"
-}
+```text
+executionId
+businessDate
+firstSourceId
+lastSourceId
+snapshotRecordCount
+fileName
+recordCount
+contentLength
+fileHash
+status = Completed
 ```
 
 ---
@@ -778,10 +776,10 @@ Si el blob ya existe:
 |---|---|
 | Dos ejecuciones para el mismo corte | Lock aplicativo y restricción de unicidad. |
 | Registro duplicado dentro del snapshot | `UNIQUE (executionId, sourceId)` y `UNIQUE (executionId, uniqueHash)`. |
-| Archivo parcial | Bloques no confirmados, `CommitBlockList` al final y consumo condicionado al manifiesto. |
+| Archivo parcial | Bloques no confirmados, `CommitBlockList` al final y consumo condicionado a estado `Completed` en SQL. |
 | Fila inválida | No confirmar el archivo; ejecución `Failed`. |
 | Interrupción antes de publicar | Regenerar desde el inicio del snapshot. |
-| Interrupción después de publicar | Reconciliar blob y manifiesto y completar SQL. |
+| Interrupción después de publicar | Reconciliar blob con SQL y completar o bloquear la ejecución según corresponda. |
 | Sobrescritura | Condición de creación y nombre por `executionId`. |
 | Pérdida de auditoría | Retención de staging. |
 | Clave AES solicitada por fila | Unwrap una sola vez y reutilización local. |
@@ -847,7 +845,7 @@ sequenceDiagram
     SQL-->>Fn: Ejecución incompleta o ninguna
 
     alt Existe ejecución incompleta
-        Fn->>Blob: Verificar blob y manifiesto
+        Fn->>Blob: Verificar blob final
         Blob-->>Fn: Estado del archivo
 
         alt Archivo final válido
@@ -897,15 +895,13 @@ sequenceDiagram
         SQL-->>Fn: Estado confirmado
         Fn->>Blob: Confirmar lista de bloques
         Blob-->>Fn: Archivo definitivo
-        Fn->>Blob: Crear manifiesto
-        Blob-->>Fn: Manifiesto confirmado
-        Fn->>SQL: Marcar ejecución y staging Completed
+        Fn->>SQL: Marcar ejecución Completed con hash, conteo y tamaño
         SQL-->>Fn: Transacción confirmada
         Fn->>AI: Registrar éxito
     end
 
     opt Error de datos
-        Fn->>SQL: Marcar fila y ejecución Failed
+        Fn->>SQL: Marcar ejecución Failed
         Fn->>AI: Registrar error sanitizado
     end
 
@@ -954,8 +950,7 @@ sequenceDiagram
     end
 
     Fn->>Blob: Confirmar bloques y publicar CSV
-    Fn->>Blob: Crear manifiesto de disponibilidad
-    Fn->>SQL: Marcar ejecución como Completed
+    Fn->>SQL: Marcar ejecución como Completed con controles del archivo
     Fn->>AI: Registrar métricas de éxito
 ```
 
@@ -1028,7 +1023,6 @@ classDiagram
     class BlobPublisher {
         +StageBlockAsync(block)
         +CommitBlocksAsync(fileName, blockIds)
-        +CreateManifestAsync(manifest)
         +ExistsAsync(fileName)
     }
 
@@ -1072,7 +1066,6 @@ classDiagram
     class BatchResult {
         +Guid executionId
         +string fileName
-        +string manifestFileName
         +long recordCount
         +long contentLength
         +byte[] fileHash
@@ -1105,7 +1098,7 @@ Responsabilidades principales:
 - `CryptoService`: obtiene la clave AES y desencripta `dataMap`.
 - `DataMapValidator`: valida y compacta el JSON desencriptado.
 - `CsvFileWriter`: construye el CSV por streaming.
-- `BlobPublisher`: publica bloques, archivo final y manifiesto.
+- `BlobPublisher`: publica bloques y confirma el archivo final.
 - `TelemetryService`: registra métricas, trazas y errores sanitizados.
 
 ### 10.3 Diagrama de paquetes Java
@@ -1123,16 +1116,14 @@ classDiagram
         class DataMapCryptoService
         class CsvWriterService
         class StoragePublisherService
-        class ManifestWriterService
-        class BatchTelemetryService
+        class TelemetryService
     }
 
     namespace com.empresa.estructuracion.batch.service.impl {
         class CryptoService
         class CsvGenerationService
         class BlobStorageService
-        class ManifestService
-        class TelemetryService
+        class DefaultTelemetryService
     }
 
     namespace com.empresa.estructuracion.batch.repository {
@@ -1153,7 +1144,6 @@ classDiagram
         class StagingRecord
         class BatchResult
         class BatchError
-        class Manifest
     }
 
     namespace com.empresa.estructuracion.batch.config {
@@ -1188,8 +1178,7 @@ classDiagram
     EstructuracionBatchService --> DataMapCryptoService
     EstructuracionBatchService --> CsvWriterService
     EstructuracionBatchService --> StoragePublisherService
-    EstructuracionBatchService --> ManifestWriterService
-    EstructuracionBatchService --> BatchTelemetryService
+    EstructuracionBatchService --> TelemetryService
     EstructuracionBatchService --> BatchProperties
 
     EstructuracionBatchService --> BusinessDateCutoff
@@ -1202,8 +1191,7 @@ classDiagram
     CryptoService ..|> DataMapCryptoService
     CsvGenerationService ..|> CsvWriterService
     BlobStorageService ..|> StoragePublisherService
-    ManifestService ..|> ManifestWriterService
-    TelemetryService ..|> BatchTelemetryService
+    DefaultTelemetryService ..|> TelemetryService
 
     SqlExecutionRepository --> SqlConnectionProvider
     SqlStagingRepository --> SqlConnectionProvider
@@ -1218,8 +1206,7 @@ classDiagram
     CsvGenerationService --> HashUtils
     CsvGenerationService --> BatchResult
     BlobStorageService --> StoragePublicationException
-    ManifestService --> Manifest
-    TelemetryService --> BatchError
+    DefaultTelemetryService --> BatchError
 
     BusinessDateCalculator --> BusinessDateCutoff
     FileNameUtils --> ExecutionContext
@@ -1233,7 +1220,7 @@ Paquetes recomendados:
 
 - `function`: contiene el Timer Trigger, el HTTP Trigger manual de pruebas y delega al orquestador.
 - `service`: contiene la lógica del proceso batch y las interfaces de servicios técnicos.
-- `service.impl`: contiene implementaciones concretas de criptografía, CSV, Storage, manifiesto y telemetría.
+- `service.impl`: contiene implementaciones concretas de criptografía, CSV, Storage y telemetría.
 - `repository`: contiene interfaces de repositorio.
 - `repository.impl`: contiene implementaciones SQL, procedimientos, consultas y mapeo de resultados.
 - `model`: contiene objetos de datos del proceso.
@@ -1306,7 +1293,7 @@ BATCH_WRAPPED_AES_SECRET_NAME=wrapped-aes-key
 
 ### 11.2 Azure Storage Account
 
-Objetivo: almacenar el CSV final, bloques no confirmados durante la generación y el manifiesto de disponibilidad.
+Objetivo: almacenar el CSV final y bloques no confirmados durante la generación.
 
 Pasos:
 
@@ -1325,7 +1312,6 @@ estructuracion/
 ```text
 exports/estructuracion/businessDate=YYYY-MM-DD/
 estructuracion_YYYYMMDD_{executionId}.csv
-estructuracion_YYYYMMDD_{executionId}.manifest.json
 ```
 
 7. Configurar permisos para que la Azure Function pueda escribir blobs y leer propiedades.
@@ -1475,8 +1461,8 @@ BATCH_WRAPPED_AES_SECRET_NAME=...
 | `BATCH_SQL_BATCH_SIZE` | No | `1000` | Tamaño de lote para leer staging por `sourceId`. |
 | `BATCH_SQL_STALE_MINUTES` | No | `15` | Minutos sin señal de vida para considerar recuperable una ejecución incompleta. |
 | `BATCH_SQL_MAX_ATTEMPTS` | No | `3` | Reservada para fase de reintentos controlados. En la primera fase queda documentada, pero no limita intentos. |
-| `BATCH_STORAGE_CONNECTION_STRING` | Sí | `DefaultEndpointsProtocol=...` | Cadena de conexión del Storage donde se publica el archivo y manifiesto. Debe administrarse como secreto. |
-| `BATCH_STORAGE_CONTAINER` | Sí | `exports` | Contenedor destino del archivo y manifiesto. |
+| `BATCH_STORAGE_CONNECTION_STRING` | Sí | `DefaultEndpointsProtocol=...` | Cadena de conexión del Storage donde se publica el archivo. Debe administrarse como secreto. |
+| `BATCH_STORAGE_CONTAINER` | Sí | `exports` | Contenedor destino del archivo. |
 | `BATCH_STORAGE_BASE_PATH` | No | `estructuracion` | Prefijo lógico dentro del contenedor. |
 | `BATCH_KEY_VAULT_URL` | Sí | `https://kv-estruct-batch-dev.vault.azure.net/` | URL del Key Vault que contiene la RSA y el secret de AES envuelta. |
 | `BATCH_RSA_KEY_NAME` | Sí | `rsa-estruct-batch-key` | Nombre de la clave RSA usada para desenvolver la AES. |
@@ -1562,7 +1548,6 @@ decrypt
 csvBuild
 blobStageBlock
 blobCommit
-manifestCreate
 sqlComplete
 ```
 
@@ -1649,14 +1634,12 @@ Antes de iniciar la programación, deben cerrarse los siguientes puntos para ase
 - Confirmar uso obligatorio de `sp_getapplock` para evitar doble ejecución por `businessDate`.
 - Confirmar índices necesarios sobre tabla origen, tabla de ejecución y staging.
 
-### 12.4 Reconciliación CSV, manifiesto y SQL
+### 12.4 Reconciliación CSV y SQL
 
-- Definir qué hacer si existe CSV final pero no existe manifiesto.
-- Definir qué hacer si existe manifiesto pero SQL no está en `Completed`.
+- Definir qué hacer si existe CSV final pero SQL no está en `Completed`.
 - Definir qué hacer si existe CSV con hash distinto al esperado.
-- Definir qué hacer si existe manifiesto con `executionId` distinto.
-- Confirmar que el consumidor solo procesa el CSV cuando existe manifiesto válido.
-- Confirmar que el manifiesto contiene `executionId`, `businessDate`, conteo, tamaño, hash y fecha de generación.
+- Confirmar que el consumidor solo procesa el CSV cuando SQL está en `Completed`.
+- Confirmar que SQL contiene `executionId`, `businessDate`, conteo, tamaño, hash y fecha de generación.
 
 ### 12.5 Índices y rendimiento de base de datos
 
@@ -1671,8 +1654,7 @@ Antes de iniciar la programación, deben cerrarse los siguientes puntos para ase
 - Probar interrupción antes de crear snapshot completo.
 - Probar interrupción durante lectura de staging.
 - Probar interrupción durante carga de bloques no confirmados.
-- Probar interrupción después de publicar CSV y antes de crear manifiesto.
-- Probar interrupción después de crear manifiesto y antes de completar SQL.
+- Probar interrupción después de publicar CSV y antes de completar SQL.
 - Probar doble disparo del Timer Trigger.
 - Probar ejecución abandonada por falta de heartbeat.
 - Probar recuperación reutilizando el mismo `executionId` y snapshot.
@@ -1686,7 +1668,7 @@ Antes de iniciar la programación, deben cerrarse los siguientes puntos para ase
 - Usar `util` solo para funciones puras y pequeñas.
 - Usar excepciones propias del batch en `exception`.
 - Evitar clases con demasiadas responsabilidades.
-- Separar criptografía, generación CSV, Storage, manifiesto y telemetría en servicios distintos.
+- Separar criptografía, generación CSV, Storage y telemetría en servicios distintos.
 - Registrar logs con `executionId` y sin información sensible.
 
 ---

@@ -55,7 +55,6 @@ public class StagedOutputService implements OutputService {
 
     private BatchResult generate(ExecutionContext execution, byte[] aesKey) {
         String outputName = FileNameUtils.outputPath(properties.storageBasePath(), execution);
-        String manifestName = FileNameUtils.manifestPath(outputName);
         PublicationSession publicationSession = storagePublisherService.beginPublication();
         MessageDigest digest = HashUtils.sha256();
         long contentLength = 0;
@@ -103,7 +102,6 @@ public class StagedOutputService implements OutputService {
         return new BatchResult(
                 execution.executionId(),
                 outputName,
-                manifestName,
                 publicationSession,
                 recordCount,
                 contentLength,

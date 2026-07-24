@@ -12,7 +12,7 @@ Azure Function Java 21 para generar un archivo CSV diario a partir del snapshot 
 6. Desencriptado de `dataMap`.
 7. Validacion de JSON.
 8. Generacion CSV por bloques no confirmados.
-9. Publicacion del CSV, manifiesto y cierre SQL.
+9. Publicacion del CSV y cierre SQL.
 
 ## Salida CSV
 

@@ -8,6 +8,4 @@ public interface StoragePublisherService {
     void stageBlock(PublicationSession session, String blobName, int blockNumber, byte[] content);
 
     void commitBlocks(PublicationSession session, String blobName);
-
-    void uploadManifest(String manifestName, String manifestJson);
 }

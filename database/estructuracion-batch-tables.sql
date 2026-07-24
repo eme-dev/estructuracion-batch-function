@@ -49,6 +49,10 @@ CREATE TABLE ocrt.EstructuracionEjecucion
     cutoffFromUtc     DATETIME2(3) NOT NULL,
     cutoffToUtc       DATETIME2(3) NOT NULL,
     maxSourceId       INT NULL,
+    firstSourceId     INT NULL,
+    lastSourceId      INT NULL,
+    snapshotRecordCount BIGINT NOT NULL
+        CONSTRAINT DF_EstructuracionEjecucion_SnapshotRecordCount DEFAULT (0),
 
     status            VARCHAR(20) NOT NULL,
     startedAt         DATETIME2(3) NOT NULL,
@@ -60,6 +64,8 @@ CREATE TABLE ocrt.EstructuracionEjecucion
 
     fileName          NVARCHAR(500) NULL,
     fileHash          BINARY(32) NULL,
+    recordCount       BIGINT NULL,
+    contentLength     BIGINT NULL,
     errorMessage      NVARCHAR(2000) NULL,
 
     CONSTRAINT PK_EstructuracionEjecucion

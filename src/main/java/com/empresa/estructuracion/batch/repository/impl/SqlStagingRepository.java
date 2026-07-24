@@ -53,18 +53,4 @@ public class SqlStagingRepository implements StagingRepository {
             throw new RepositoryException("Unable to read staging batch.", ex);
         }
     }
-
-    @Override
-    public void markRowFailed(long stagingId, String errorCode, String sanitizedMessage) {
-        String sql = "{call ocrt.usp_FailEstructuracionStagingRow(?, ?, ?)}";
-        try (Connection connection = connectionProvider.getConnection();
-             CallableStatement statement = connection.prepareCall(sql)) {
-            statement.setLong(1, stagingId);
-            statement.setString(2, errorCode);
-            statement.setString(3, sanitizedMessage);
-            statement.execute();
-        } catch (Exception ex) {
-            throw new RepositoryException("Unable to fail staging row.", ex);
-        }
-    }
 }

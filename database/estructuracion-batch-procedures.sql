@@ -282,17 +282,3 @@ BEGIN
 END;
 GO
 
-CREATE OR ALTER PROCEDURE ocrt.usp_FailEstructuracionStagingRow
-    @StagingId BIGINT,
-    @ErrorCode NVARCHAR(100),
-    @ErrorMessage NVARCHAR(2000)
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    UPDATE ocrt.EstructuracionStaging
-       SET processingStatus = 'Failed',
-           errorMessage = CONCAT(@ErrorCode, ': ', @ErrorMessage)
-     WHERE stagingId = @StagingId;
-END;
-GO

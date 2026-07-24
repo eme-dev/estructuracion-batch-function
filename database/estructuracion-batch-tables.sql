@@ -111,11 +111,6 @@ CREATE TABLE ocrt.EstructuracionStaging
     documentType        VARCHAR(50) NOT NULL,
     uniqueHash          BINARY(32) NOT NULL,
 
-    processingStatus    VARCHAR(20) NOT NULL
-        CONSTRAINT DF_EstructuracionStaging_Status DEFAULT ('Pending'),
-
-    errorMessage        NVARCHAR(2000) NULL,
-
     CONSTRAINT PK_EstructuracionStaging
         PRIMARY KEY (stagingId),
 
@@ -127,17 +122,7 @@ CREATE TABLE ocrt.EstructuracionStaging
         UNIQUE (executionId, sourceId),
 
     CONSTRAINT UQ_EstructuracionStaging_ExecutionHash
-        UNIQUE (executionId, uniqueHash),
-
-    CONSTRAINT CK_EstructuracionStaging_Status
-        CHECK
-        (
-            processingStatus IN
-            (
-                'Pending',
-                'Failed'
-            )
-        )
+        UNIQUE (executionId, uniqueHash)
 );
 GO
 
@@ -145,15 +130,6 @@ CREATE INDEX IX_EstructuracionStaging_ExecutionSource
 ON ocrt.EstructuracionStaging
 (
     executionId,
-    sourceId
-);
-GO
-
-CREATE INDEX IX_EstructuracionStaging_ExecutionStatusSource
-ON ocrt.EstructuracionStaging
-(
-    executionId,
-    processingStatus,
     sourceId
 );
 GO

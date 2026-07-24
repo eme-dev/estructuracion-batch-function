@@ -9,7 +9,4 @@ public interface StagingRepository {
     long count(UUID executionId);
 
     List<StagingRecord> readBatch(UUID executionId, int lastSourceId, int batchSize);
-
-    void markRowFailed(long stagingId, String errorCode, String sanitizedMessage);
 }
-

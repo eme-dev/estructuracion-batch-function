@@ -342,11 +342,6 @@ CREATE TABLE ocrt.EstructuracionStaging
     documentType        VARCHAR(50) NOT NULL,
     uniqueHash          BINARY(32) NOT NULL,
 
-    processingStatus    VARCHAR(20) NOT NULL
-        CONSTRAINT DF_EstructuracionStaging_Status DEFAULT ('Pending'),
-
-    errorMessage        NVARCHAR(2000) NULL,
-
     CONSTRAINT PK_EstructuracionStaging
         PRIMARY KEY (stagingId),
 
@@ -358,17 +353,7 @@ CREATE TABLE ocrt.EstructuracionStaging
         UNIQUE (executionId, sourceId),
 
     CONSTRAINT UQ_EstructuracionStaging_ExecutionHash
-        UNIQUE (executionId, uniqueHash),
-
-    CONSTRAINT CK_EstructuracionStaging_Status
-        CHECK
-        (
-            processingStatus IN
-            (
-                'Pending',
-                'Failed'
-            )
-        )
+        UNIQUE (executionId, uniqueHash)
 );
 GO
 
@@ -380,14 +365,6 @@ ON ocrt.EstructuracionStaging
 );
 GO
 
-CREATE INDEX IX_EstructuracionStaging_ExecutionStatusSource
-ON ocrt.EstructuracionStaging
-(
-    executionId,
-    processingStatus,
-    sourceId
-);
-GO
 ```
 
 ### 5.5 Decisiones del modelo
@@ -447,8 +424,6 @@ erDiagram
         NVARCHAR listaTables
         VARCHAR documentType
         BINARY uniqueHash
-        VARCHAR processingStatus
-        NVARCHAR errorMessage
     }
 ```
 
@@ -1543,7 +1518,6 @@ ocrt.usp_CountEstructuracionStaging
 ocrt.usp_ReadEstructuracionStagingBatch
 ocrt.usp_CompleteEstructuracionExecution
 ocrt.usp_FailEstructuracionExecution
-ocrt.usp_FailEstructuracionStagingRow
 ```
 
 4. Crear índice en origen para el corte:
@@ -1556,7 +1530,6 @@ statusFile, creationDateTime, id
 
 ```text
 executionId, sourceId
-executionId, processingStatus, sourceId
 ```
 
 6. Crear índice único por `businessDate` para evitar doble ejecución activa o completada.
@@ -1690,7 +1663,6 @@ Antes de iniciar la programación, deben cerrarse los siguientes puntos para ase
 - Confirmar índice eficiente en origen para `statusFile`, `creationDateTime` e `id`.
 - Confirmar índice único por `businessDate` para ejecuciones activas o completadas.
 - Confirmar índice en staging por `executionId` y `sourceId`.
-- Confirmar índice en staging por `executionId`, `processingStatus` y `sourceId`.
 - Validar que no se use `CAST(creationDateTime AS date)` en filtros.
 - Ejecutar prueba de carga con volúmenes reales y tamaños reales de `dataMap`.
 

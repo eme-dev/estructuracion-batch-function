@@ -26,6 +26,8 @@ id,fileName,statusFile,clientName,creationDateTime,dataMap,listaTables,documentT
 
 `dataMap` y `listaTables` se escriben como JSON compacto dentro de una columna CSV. Las comillas internas se escapan segun el formato CSV estandar.
 
+En la tabla origen, `dataMap` debe llegar como un string Base64 que contiene `IV + ciphertext`. Para AES/GCM el IV esperado es de 12 bytes y el `ciphertext` debe incluir el tag de autenticacion.
+
 Ejemplo de una fila:
 
 ```csv

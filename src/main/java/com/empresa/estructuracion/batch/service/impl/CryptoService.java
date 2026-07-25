@@ -9,8 +9,6 @@ import com.azure.security.keyvault.secrets.SecretClientBuilder;
 import com.empresa.estructuracion.batch.config.KeyVaultConfig;
 import com.empresa.estructuracion.batch.exception.CryptoException;
 import com.empresa.estructuracion.batch.service.DataMapCryptoService;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
@@ -21,13 +19,13 @@ import java.util.Base64;
 
 public class CryptoService implements DataMapCryptoService {
     private static final int GCM_TAG_BITS = 128;
+    private static final int GCM_IV_BYTES = 12;
+    private static final int GCM_TAG_BYTES = 16;
 
     private final KeyVaultConfig keyVaultConfig;
-    private final ObjectMapper objectMapper;
 
-    public CryptoService(KeyVaultConfig keyVaultConfig, ObjectMapper objectMapper) {
+    public CryptoService(KeyVaultConfig keyVaultConfig) {
         this.keyVaultConfig = keyVaultConfig;
-        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -61,11 +59,10 @@ public class CryptoService implements DataMapCryptoService {
     @Override
     public String decryptDataMap(String encryptedDataMap, byte[] aesKey) {
         try {
-            JsonNode envelope = objectMapper.readTree(encryptedDataMap);
-            byte[] iv = base64(envelope, "iv", "nonce");
-            byte[] ciphertext = base64(envelope, "ciphertext", "data");
-            byte[] tag = optionalBase64(envelope, "tag");
-            byte[] cipherInput = tag.length == 0 ? ciphertext : concat(ciphertext, tag);
+            byte[] encryptedPayload = Base64.getDecoder().decode(encryptedDataMap.trim());
+            validateEncryptedPayload(encryptedPayload);
+            byte[] iv = Arrays.copyOfRange(encryptedPayload, 0, GCM_IV_BYTES);
+            byte[] cipherInput = Arrays.copyOfRange(encryptedPayload, GCM_IV_BYTES, encryptedPayload.length);
 
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
             cipher.init(
@@ -86,24 +83,9 @@ public class CryptoService implements DataMapCryptoService {
         }
     }
 
-    private byte[] base64(JsonNode node, String primaryName, String alternativeName) {
-        JsonNode value = node.has(primaryName) ? node.get(primaryName) : node.get(alternativeName);
-        if (value == null || value.asText().isBlank()) {
-            throw new IllegalArgumentException("Missing encrypted dataMap field: " + primaryName);
+    private void validateEncryptedPayload(byte[] encryptedPayload) {
+        if (encryptedPayload.length <= GCM_IV_BYTES + GCM_TAG_BYTES) {
+            throw new IllegalArgumentException("Encrypted dataMap payload is too short.");
         }
-        return Base64.getDecoder().decode(value.asText());
-    }
-
-    private byte[] optionalBase64(JsonNode node, String name) {
-        JsonNode value = node.get(name);
-        return value == null || value.asText().isBlank()
-                ? new byte[0]
-                : Base64.getDecoder().decode(value.asText());
-    }
-
-    private byte[] concat(byte[] left, byte[] right) {
-        byte[] result = Arrays.copyOf(left, left.length + right.length);
-        System.arraycopy(right, 0, result, left.length, right.length);
-        return result;
     }
 }

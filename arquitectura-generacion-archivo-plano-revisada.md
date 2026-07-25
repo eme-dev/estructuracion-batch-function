@@ -231,7 +231,7 @@ GO
 
 Notas:
 
-- `dataMap` contiene la estructura JSON cifrada.
+- `dataMap` contiene un string Base64 con la concatenación binaria `IV + ciphertext`; para AES-GCM el IV esperado es de 12 bytes y el `ciphertext` incluye el tag de autenticación.
 - `listaTables` se conserva como parte del registro fuente.
 - `statusFile = 1` identifica registros elegibles para el batch.
 - El filtro del corte debe usar `creationDateTime >= @CutoffFromUtc AND creationDateTime < @CutoffToUtc`.
@@ -1603,10 +1603,11 @@ Antes de iniciar la programación, deben cerrarse los siguientes puntos para ase
 
 ### 12.2 Contrato criptográfico exacto
 
-- Confirmar algoritmo AES exacto.
-- Confirmar modo de operación, idealmente autenticado como AES-GCM.
-- Confirmar ubicación de IV, nonce, tag y ciphertext.
-- Confirmar codificación del valor cifrado.
+- Algoritmo: `AES/GCM/NoPadding`.
+- Formato de `dataMap`: string Base64 del payload binario `IV + ciphertext`.
+- IV: primeros 12 bytes del payload decodificado.
+- Ciphertext: bytes restantes del payload decodificado; incluye el tag GCM de autenticación.
+- Codificación del plaintext: UTF-8.
 - Confirmar cómo se identifica la versión de clave.
 - Confirmar cómo se obtiene la clave AES envuelta.
 - Confirmar que Key Vault se invoca una sola vez por ejecución.

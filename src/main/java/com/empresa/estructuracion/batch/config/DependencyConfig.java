@@ -65,7 +65,7 @@ public class DependencyConfig {
             StorageConfig storageConfig,
             KeyVaultConfig keyVaultConfig,
             ObjectMapper objectMapper) {
-        CryptoService cryptoService = new CryptoService(keyVaultConfig, objectMapper);
+        CryptoService cryptoService = new CryptoService(keyVaultConfig);
         CsvGenerationService csvGenerationService = new CsvGenerationService(objectMapper);
         BlobStorageService blobStorageService = new BlobStorageService(storageConfig);
         StagedOutputService outputService = new StagedOutputService(

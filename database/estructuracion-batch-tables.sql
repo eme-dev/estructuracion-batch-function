@@ -20,6 +20,11 @@ CREATE TABLE ocrt.Estructuracion
     listaTables         NVARCHAR(MAX) NOT NULL,
     documentType        VARCHAR(50) NOT NULL,
     uniqueHash          BINARY(32) NOT NULL,
+    isReprocessed         BIT NOT NULL
+        CONSTRAINT DF_Estructuracion_IsReprocessed DEFAULT (0),
+    reprocessDateTime      DATETIME NULL,
+    reprocessCount          INT NOT NULL
+        CONSTRAINT DF_Estructuracion_ReprocessCount DEFAULT (0),
 
     CONSTRAINT PK_Estructuracion
         PRIMARY KEY (id)
@@ -112,9 +117,11 @@ CREATE TABLE ocrt.EstructuracionStaging
     statusFile          BIT NOT NULL,
     clientName          NVARCHAR(MAX) NOT NULL,
     creationDateTime    DATETIME NOT NULL,
-    encryptedDataMap    NVARCHAR(MAX) NOT NULL,
-    listaTables         NVARCHAR(MAX) NOT NULL,
+    dataMap             NVARCHAR(MAX) NOT NULL,
     documentType        VARCHAR(50) NOT NULL,
+    isReprocessed       BIT NOT NULL,
+    reprocessDateTime   DATETIME NULL,
+    reprocessCount      INT NOT NULL,
 
     CONSTRAINT PK_EstructuracionStaging
         PRIMARY KEY (stagingId),

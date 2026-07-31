@@ -9,7 +9,9 @@ public record StagingRecord(
         boolean statusFile,
         String clientName,
         Instant creationDateTime,
-        String encryptedDataMap,
-        String listaTables,
-        String documentType) {
+        String dataMap,
+        String documentType,
+        boolean isReprocessed,
+        Instant reprocessDateTime,
+        int reprocessCount) {
 }

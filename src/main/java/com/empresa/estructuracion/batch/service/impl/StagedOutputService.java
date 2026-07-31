@@ -82,7 +82,7 @@ public class StagedOutputService implements OutputService {
             }
 
             for (StagingRecord stagingRecord : records) {
-                String decryptedDataMap = cryptoService.decryptDataMap(stagingRecord.encryptedDataMap(), aesKey);
+                String decryptedDataMap = cryptoService.decryptDataMap(stagingRecord.dataMap(), aesKey);
                 byte[] row = outputWriterService.rowBytes(stagingRecord, decryptedDataMap, digest);
                 block.writeBytes(row);
                 contentLength += row.length;

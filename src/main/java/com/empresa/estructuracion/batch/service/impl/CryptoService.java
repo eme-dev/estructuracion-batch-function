@@ -57,9 +57,9 @@ public class CryptoService implements DataMapCryptoService {
     }
 
     @Override
-    public String decryptDataMap(String encryptedDataMap, byte[] aesKey) {
+    public String decryptDataMap(String dataMap, byte[] aesKey) {
         try {
-            byte[] encryptedPayload = Base64.getDecoder().decode(encryptedDataMap.trim());
+            byte[] encryptedPayload = Base64.getDecoder().decode(dataMap.trim());
             validateEncryptedPayload(encryptedPayload);
             byte[] iv = Arrays.copyOfRange(encryptedPayload, 0, GCM_IV_BYTES);
             byte[] cipherInput = Arrays.copyOfRange(encryptedPayload, GCM_IV_BYTES, encryptedPayload.length);

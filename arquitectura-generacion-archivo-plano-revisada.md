@@ -205,6 +205,12 @@ CREATE TABLE ocrt.Estructuracion
     dataMap             NVARCHAR(MAX) NOT NULL,
     listaTables         NVARCHAR(MAX) NOT NULL,
     documentType        VARCHAR(50) NOT NULL,
+    uniqueHash          BINARY(32) NOT NULL,
+    isReprocessed       BIT NOT NULL
+        CONSTRAINT DF_Estructuracion_IsReprocessed DEFAULT (0),
+    reprocessDateTime   DATETIME NULL,
+    reprocessCount      INT NOT NULL
+        CONSTRAINT DF_Estructuracion_ReprocessCount DEFAULT (0),
 
     CONSTRAINT PK_Estructuracion
         PRIMARY KEY (id)
@@ -338,9 +344,11 @@ CREATE TABLE ocrt.EstructuracionStaging
     statusFile          BIT NOT NULL,
     clientName          NVARCHAR(MAX) NOT NULL,
     creationDateTime    DATETIME NOT NULL,
-    encryptedDataMap    NVARCHAR(MAX) NOT NULL,
-    listaTables         NVARCHAR(MAX) NOT NULL,
+    dataMap             NVARCHAR(MAX) NOT NULL,
     documentType        VARCHAR(50) NOT NULL,
+    isReprocessed       BIT NOT NULL,
+    reprocessDateTime   DATETIME NULL,
+    reprocessCount      INT NOT NULL,
 
     CONSTRAINT PK_EstructuracionStaging
         PRIMARY KEY (stagingId),
@@ -387,6 +395,9 @@ erDiagram
         NVARCHAR listaTables
         VARCHAR documentType
         BINARY uniqueHash
+        BIT isReprocessed
+        DATETIME reprocessDateTime
+        INT reprocessCount
     }
 
     ESTRUCTURACION_EJECUCION {
@@ -413,9 +424,11 @@ erDiagram
         BIT statusFile
         NVARCHAR clientName
         DATETIME creationDateTime
-        NVARCHAR encryptedDataMap
-        NVARCHAR listaTables
+        NVARCHAR dataMap
         VARCHAR documentType
+        BIT isReprocessed
+        DATETIME reprocessDateTime
+        INT reprocessCount
     }
 ```
 
@@ -485,9 +498,11 @@ INSERT INTO ocrt.EstructuracionStaging
     statusFile,
     clientName,
     creationDateTime,
-    encryptedDataMap,
-    listaTables,
-    documentType
+    dataMap,
+    documentType,
+    isReprocessed,
+    reprocessDateTime,
+    reprocessCount
 )
 SELECT
     @ExecutionId,
@@ -497,8 +512,10 @@ SELECT
     e.clientName,
     e.creationDateTime,
     e.dataMap,
-    e.listaTables,
-    e.documentType
+    e.documentType,
+    e.isReprocessed,
+    e.reprocessDateTime,
+    e.reprocessCount
 FROM ocrt.Estructuracion e
 WHERE e.statusFile = 1
   AND e.id <= @MaxSourceId
@@ -546,9 +563,11 @@ SELECT TOP (@BatchSize)
        statusFile,
        clientName,
        creationDateTime,
-       encryptedDataMap,
-       listaTables,
-       documentType
+       dataMap,
+       documentType,
+       isReprocessed,
+       reprocessDateTime,
+       reprocessCount
 FROM ocrt.EstructuracionStaging
 WHERE executionId = @ExecutionId
   AND sourceId > @LastSourceId
@@ -567,7 +586,7 @@ lastSourceId = máximo sourceId leído
 
 Por cada fila:
 
-1. descifrar `encryptedDataMap`;
+1. descifrar `dataMap`;
 2. validar autenticación criptográfica;
 3. validar que el `dataMap` desencriptado sea JSON válido;
 4. compactar el JSON para escribirlo como columna CSV;
@@ -688,19 +707,19 @@ Contrato inicial recomendado:
 - campos de texto entre comillas cuando contengan coma, comillas dobles, CR o LF;
 - comillas dobles internas escapadas duplicándolas;
 - `dataMap` descifrado, validado como JSON y compactado antes de escribirlo como una columna CSV;
-- `listaTables` compactado antes de escribirlo como una columna CSV.
+- `listaTables` emitido vacio por contrato del consumidor.
 
 Columnas iniciales:
 
 ```text
-id,fileName,statusFile,clientName,creationDateTime,dataMap,listaTables,documentType
+fileName,statusFile,clientName,creationDateTime,dataMap,listaTables,documentType,isReprocessed,reprocessDateTime,reprocessCount
 ```
 
 Ejemplo:
 
 ```csv
-id,fileName,statusFile,clientName,creationDateTime,dataMap,listaTables,documentType
-1,documento.pdf,true,Cliente,2026-07-15T10:00:00Z,"{""campo"":""valor""}","[""tabla1""]",FACTURA
+fileName,statusFile,clientName,creationDateTime,dataMap,listaTables,documentType,isReprocessed,reprocessDateTime,reprocessCount
+documento.pdf,true,Cliente,2026-07-15T10:00:00Z,"{""campo"":""valor""}",,FACTURA,false,,0
 ```
 
 El CSV debe generarse mediante streaming. No se debe construir el archivo completo en memoria.
@@ -990,7 +1009,7 @@ classDiagram
 
     class CryptoService {
         +UnwrapAesKeyAsync(keyVersion)
-        +DecryptDataMap(encryptedDataMap, aesKey)
+        +DecryptDataMap(dataMap, aesKey)
         +ClearKey(aesKey)
     }
 
@@ -1043,9 +1062,11 @@ classDiagram
         +bool statusFile
         +string clientName
         +DateTime creationDateTime
-        +string encryptedDataMap
-        +string listaTables
+        +string dataMap
         +string documentType
+        +bool isReprocessed
+        +DateTime reprocessDateTime
+        +int reprocessCount
     }
 
     class BatchResult {

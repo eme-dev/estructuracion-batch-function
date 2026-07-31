@@ -113,9 +113,11 @@ BEGIN
         statusFile,
         clientName,
         creationDateTime,
-        encryptedDataMap,
-        listaTables,
-        documentType
+        dataMap,
+        documentType,
+        isReprocessed,
+        reprocessDateTime,
+        reprocessCount
     )
     SELECT
         @ExecutionId,
@@ -125,8 +127,10 @@ BEGIN
         e.clientName,
         e.creationDateTime,
         e.dataMap,
-        e.listaTables,
-        e.documentType
+        e.documentType,
+        e.isReprocessed,
+        e.reprocessDateTime,
+        e.reprocessCount
     FROM ocrt.Estructuracion e
     WHERE e.statusFile = 1
       AND (@MaxSourceId IS NULL OR e.id <= @MaxSourceId)
@@ -242,9 +246,11 @@ BEGIN
            statusFile,
            clientName,
            creationDateTime,
-           encryptedDataMap,
-           listaTables,
-           documentType
+           dataMap,
+           documentType,
+           isReprocessed,
+           reprocessDateTime,
+           reprocessCount
     FROM ocrt.EstructuracionStaging
     WHERE executionId = @ExecutionId
       AND sourceId > @LastSourceId

@@ -1,4 +1,4 @@
-package com.empresa.estructuracion.batch.repository.impl;
+package com.empresa.estructuracion.batch.repository.mapper;
 
 import com.empresa.estructuracion.batch.model.StagingRecord;
 
@@ -16,7 +16,6 @@ public class StagingRecordRowMapper {
                 rs.getTimestamp("creationDateTime").toInstant(),
                 rs.getString("encryptedDataMap"),
                 rs.getString("listaTables"),
-                rs.getString("documentType"),
-                rs.getBytes("uniqueHash"));
+                rs.getString("documentType"));
     }
 }

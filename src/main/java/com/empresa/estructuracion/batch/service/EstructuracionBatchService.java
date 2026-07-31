@@ -1,6 +1,8 @@
 package com.empresa.estructuracion.batch.service;
 
 import com.empresa.estructuracion.batch.config.BatchProperties;
+import com.empresa.estructuracion.batch.config.RepositoryDependencies;
+import com.empresa.estructuracion.batch.config.ServiceDependencies;
 import com.empresa.estructuracion.batch.exception.StorageReconciliationRequiredException;
 import com.empresa.estructuracion.batch.model.BatchError;
 import com.empresa.estructuracion.batch.model.BatchResult;
@@ -10,6 +12,8 @@ import com.empresa.estructuracion.batch.model.ExecutionStatus;
 import com.empresa.estructuracion.batch.repository.ExecutionRepository;
 import com.empresa.estructuracion.batch.util.BusinessDateCalculator;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -17,6 +21,8 @@ import java.util.UUID;
 import java.util.logging.Logger;
 
 public class EstructuracionBatchService {
+    private static final int FAILURE_DETAILS_MAX_LENGTH = 12000;
+
     private final BatchProperties properties;
     private final ExecutionRepository executionRepository;
     private final OutputService outputService;
@@ -25,8 +31,8 @@ public class EstructuracionBatchService {
 
     public EstructuracionBatchService(
             BatchProperties properties,
-            EstructuracionBatchRepositories repositories,
-            EstructuracionBatchServices services) {
+            RepositoryDependencies repositories,
+            ServiceDependencies services) {
         this.properties = properties;
         this.executionRepository = repositories.executionRepository();
         this.outputService = services.outputService();
@@ -70,19 +76,24 @@ public class EstructuracionBatchService {
     }
 
     private void handleFailure(Logger logger, UUID executionId, Exception ex) {
-        String sanitized = sanitizeFailureMessage(ex);
+        String failureDetails = buildFailureDetails(ex);
         if (executionId != null && !(ex instanceof StorageReconciliationRequiredException)) {
-            executionRepository.fail(executionId, ex.getClass().getSimpleName(), sanitized, now());
+            executionRepository.fail(executionId, ex.getClass().getSimpleName(), failureDetails, now());
         }
         telemetryService.trackBatchFailed(logger, new BatchError(
                 executionId,
                 ex.getClass().getSimpleName(),
                 "TECHNICAL",
-                sanitized));
+                failureDetails));
     }
 
-    private String sanitizeFailureMessage(Exception ex) {
-        return ex.getClass().getSimpleName();
+    private String buildFailureDetails(Exception ex) {
+        StringWriter writer = new StringWriter();
+        try (PrintWriter printWriter = new PrintWriter(writer)) {
+            ex.printStackTrace(printWriter);
+        }
+        String details = writer.toString();
+        return details.substring(0, Math.min(details.length(), FAILURE_DETAILS_MAX_LENGTH));
     }
 
     private LocalDateTime now() {

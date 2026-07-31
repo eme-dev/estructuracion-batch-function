@@ -146,7 +146,7 @@ El límite real debe controlarse también por bytes, porque `dataMap` y `listaTa
 | RF-10 | Registrar trazabilidad del archivo en SQL. | `EstructuracionEjecucion` conserva archivo, conteo, tamaño y SHA-256. |
 | RF-11 | Actualizar estados después de publicar. | Ninguna fila queda procesada si no existe archivo válido. |
 | RF-12 | Recuperar interrupciones. | Se reutilizan el mismo `executionId` y snapshot. |
-| RF-13 | Evitar duplicados. | `(executionId, sourceId)` y `(executionId, uniqueHash)` son únicos. |
+| RF-13 | Evitar duplicados en staging. | `(executionId, sourceId)` es unico dentro del snapshot. |
 | RF-14 | Impedir sobrescritura. | El blob se crea con condición de no existencia. |
 | RF-15 | Auditar. | Es posible conocer estado, archivo, hash, intentos y error de cada ejecución. |
 
@@ -205,7 +205,6 @@ CREATE TABLE ocrt.Estructuracion
     dataMap             NVARCHAR(MAX) NOT NULL,
     listaTables         NVARCHAR(MAX) NOT NULL,
     documentType        VARCHAR(50) NOT NULL,
-    uniqueHash          BINARY(32) NOT NULL,
 
     CONSTRAINT PK_Estructuracion
         PRIMARY KEY (id)
@@ -265,7 +264,7 @@ CREATE TABLE ocrt.EstructuracionEjecucion
     fileHash          BINARY(32) NULL,
     recordCount       BIGINT NULL,
     contentLength     BIGINT NULL,
-    errorMessage      NVARCHAR(2000) NULL,
+    errorMessage      NVARCHAR(MAX) NULL,
 
     CONSTRAINT PK_EstructuracionEjecucion
         PRIMARY KEY (executionId),
@@ -342,20 +341,12 @@ CREATE TABLE ocrt.EstructuracionStaging
     encryptedDataMap    NVARCHAR(MAX) NOT NULL,
     listaTables         NVARCHAR(MAX) NOT NULL,
     documentType        VARCHAR(50) NOT NULL,
-    uniqueHash          BINARY(32) NOT NULL,
 
     CONSTRAINT PK_EstructuracionStaging
         PRIMARY KEY (stagingId),
 
-    CONSTRAINT FK_EstructuracionStaging_Ejecucion
-        FOREIGN KEY (executionId)
-        REFERENCES ocrt.EstructuracionEjecucion(executionId),
-
     CONSTRAINT UQ_EstructuracionStaging_ExecutionSource
-        UNIQUE (executionId, sourceId),
-
-    CONSTRAINT UQ_EstructuracionStaging_ExecutionHash
-        UNIQUE (executionId, uniqueHash)
+        UNIQUE (executionId, sourceId)
 );
 GO
 
@@ -416,7 +407,7 @@ erDiagram
 
     ESTRUCTURACION_STAGING {
         BIGINT stagingId PK
-        UNIQUEIDENTIFIER executionId FK
+        UNIQUEIDENTIFIER executionId
         INT sourceId
         NVARCHAR fileName
         BIT statusFile
@@ -425,7 +416,6 @@ erDiagram
         NVARCHAR encryptedDataMap
         NVARCHAR listaTables
         VARCHAR documentType
-        BINARY uniqueHash
     }
 ```
 
@@ -497,8 +487,7 @@ INSERT INTO ocrt.EstructuracionStaging
     creationDateTime,
     encryptedDataMap,
     listaTables,
-    documentType,
-    uniqueHash
+    documentType
 )
 SELECT
     @ExecutionId,
@@ -509,8 +498,7 @@ SELECT
     e.creationDateTime,
     e.dataMap,
     e.listaTables,
-    e.documentType,
-    e.uniqueHash
+    e.documentType
 FROM ocrt.Estructuracion e
 WHERE e.statusFile = 1
   AND e.id <= @MaxSourceId
@@ -560,8 +548,7 @@ SELECT TOP (@BatchSize)
        creationDateTime,
        encryptedDataMap,
        listaTables,
-       documentType,
-       uniqueHash
+       documentType
 FROM ocrt.EstructuracionStaging
 WHERE executionId = @ExecutionId
   AND sourceId > @LastSourceId
@@ -706,14 +693,14 @@ Contrato inicial recomendado:
 Columnas iniciales:
 
 ```text
-id,fileName,statusFile,clientName,creationDateTime,dataMap,listaTables,documentType,uniqueHash
+id,fileName,statusFile,clientName,creationDateTime,dataMap,listaTables,documentType
 ```
 
 Ejemplo:
 
 ```csv
-id,fileName,statusFile,clientName,creationDateTime,dataMap,listaTables,documentType,uniqueHash
-1,documento.pdf,true,Cliente,2026-07-15T10:00:00Z,"{""campo"":""valor""}","[""tabla1""]",FACTURA,A1B2
+id,fileName,statusFile,clientName,creationDateTime,dataMap,listaTables,documentType
+1,documento.pdf,true,Cliente,2026-07-15T10:00:00Z,"{""campo"":""valor""}","[""tabla1""]",FACTURA
 ```
 
 El CSV debe generarse mediante streaming. No se debe construir el archivo completo en memoria.
@@ -774,7 +761,7 @@ status = Completed
 | Riesgo | Mitigación |
 |---|---|
 | Dos ejecuciones para el mismo corte | Lock aplicativo y restricción de unicidad. |
-| Registro duplicado dentro del snapshot | `UNIQUE (executionId, sourceId)` y `UNIQUE (executionId, uniqueHash)`. |
+| Registro duplicado dentro del snapshot | `UNIQUE (executionId, sourceId)`. |
 | Archivo parcial | Bloques no confirmados, `CommitBlockList` al final y consumo condicionado a estado `Completed` en SQL. |
 | Fila inválida | No confirmar el archivo; ejecución `Failed`. |
 | Interrupción antes de publicar | Regenerar desde el inicio del snapshot. |
@@ -1059,7 +1046,6 @@ classDiagram
         +string encryptedDataMap
         +string listaTables
         +string documentType
-        +byte[] uniqueHash
     }
 
     class BatchResult {
@@ -1432,7 +1418,6 @@ BATCH_ZONE_ID=America/Lima
 BATCH_SQL_CONNECTION_STRING=...
 BATCH_SQL_BATCH_SIZE=1000
 BATCH_SQL_STALE_MINUTES=15
-BATCH_SQL_MAX_ATTEMPTS=3
 BATCH_STORAGE_CONNECTION_STRING=...
 BATCH_STORAGE_CONTAINER=exports
 BATCH_KEY_VAULT_URL=...
@@ -1451,7 +1436,6 @@ BATCH_WRAPPED_AES_SECRET_NAME=...
 | `BATCH_SQL_CONNECTION_STRING` | Sí | `jdbc:sqlserver://...` | Cadena JDBC hacia SQL Server. Debe administrarse como secreto. |
 | `BATCH_SQL_BATCH_SIZE` | No | `1000` | Tamaño de lote para leer staging por `sourceId`. |
 | `BATCH_SQL_STALE_MINUTES` | No | `15` | Minutos sin señal de vida para considerar recuperable una ejecución incompleta. |
-| `BATCH_SQL_MAX_ATTEMPTS` | No | `3` | Reservada para fase de reintentos controlados. En la primera fase queda documentada, pero no limita intentos. |
 | `BATCH_STORAGE_CONNECTION_STRING` | Sí | `DefaultEndpointsProtocol=...` | Cadena de conexión del Storage donde se publica el archivo. Debe administrarse como secreto. |
 | `BATCH_STORAGE_CONTAINER` | Sí | `exports` | Contenedor destino del archivo. |
 | `BATCH_KEY_VAULT_URL` | Sí | `https://kv-estruct-batch-dev.vault.azure.net/` | URL del Key Vault que contiene la RSA y el secret de AES envuelta. |

@@ -1,4 +1,4 @@
-package com.empresa.estructuracion.batch.repository.impl;
+package com.empresa.estructuracion.batch.repository.mapper;
 
 import com.empresa.estructuracion.batch.model.ExecutionContext;
 import com.empresa.estructuracion.batch.model.ExecutionStatus;

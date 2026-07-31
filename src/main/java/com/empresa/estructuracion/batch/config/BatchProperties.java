@@ -5,10 +5,5 @@ import java.time.ZoneId;
 public record BatchProperties(
         ZoneId zoneId,
         int batchSize,
-        int staleMinutes,
-        int maxAttempts,
-        String storageContainer,
-        String keyVaultUrl,
-        String rsaKeyName,
-        String wrappedAesSecretName) {
+        int staleMinutes) {
 }

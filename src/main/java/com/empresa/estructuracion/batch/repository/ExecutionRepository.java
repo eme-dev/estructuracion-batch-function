@@ -21,5 +21,5 @@ public interface ExecutionRepository {
 
     void complete(BatchResult result, LocalDateTime now);
 
-    void fail(UUID executionId, String errorCode, String sanitizedMessage, LocalDateTime now);
+    void fail(UUID executionId, String errorCode, String failureDetails, LocalDateTime now);
 }

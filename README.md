@@ -21,7 +21,7 @@ El archivo final usa extension `.csv` y content type `text/csv; charset=utf-8`.
 Columnas:
 
 ```csv
-id,fileName,statusFile,clientName,creationDateTime,dataMap,listaTables,documentType,uniqueHash
+id,fileName,statusFile,clientName,creationDateTime,dataMap,listaTables,documentType
 ```
 
 `dataMap` y `listaTables` se escriben como JSON compacto dentro de una columna CSV. Las comillas internas se escapan segun el formato CSV estandar.
@@ -31,7 +31,7 @@ En la tabla origen, `dataMap` debe llegar como un string Base64 que contiene `IV
 Ejemplo de una fila:
 
 ```csv
-1,archivo-demo-001.pdf,1,Juan Perez,2026-07-17T10:30:00Z,"{""cliente"":""Juan Perez"",""tipoDocumento"":""DNI""}","{""tables"":[""tabla_demo""]}",DNI,abc123
+1,archivo-demo-001.pdf,1,Juan Perez,2026-07-17T10:30:00Z,"{""cliente"":""Juan Perez"",""tipoDocumento"":""DNI""}","{""tables"":[""tabla_demo""]}",DNI
 ```
 
 ## Configuracion local
@@ -80,8 +80,10 @@ Escanear vulnerabilidades conocidas:
 mvn -Psecurity verify
 ```
 
-El build usa Jackson BOM para mantener alineadas las versiones de `jackson-core`, `jackson-databind`, `jackson-dataformat-xml` y modulos relacionados.
+El build fija explicitamente la misma version para `jackson-databind`, `jackson-datatype-jsr310` y `jackson-dataformat-xml`. No se debe bajar Jackson por debajo de `2.21.5`, porque versiones anteriores de la linea `2.21.x` y `2.22.0` vuelven a quedar expuestas a vulnerabilidades reportadas en `jackson-databind`.
 
 Tambien usa Netty BOM para forzar una version corregida de las dependencias transitivas usadas por Azure SDK. Esto evita volver a empaquetar versiones vulnerables como `netty-codec` anteriores a `4.1.125.Final`.
 
 Las dependencias de Azure SDK, Reactor Netty, Reactor Core y Netty se mantienen alineadas desde `dependencyManagement`. No se debe bajar `reactor-netty-http` por debajo de `1.2.18`, porque versiones anteriores vuelven a quedar expuestas a fugas de credenciales en escenarios de redirects configurados explicitamente.
+
+El perfil `security` ejecuta OWASP Dependency-Check y falla el build cuando encuentra vulnerabilidades con CVSS `>= 7.0`. Este perfil requiere salida a internet o un mirror corporativo con certificados configurados en el truststore del JDK.

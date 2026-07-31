@@ -6,6 +6,5 @@ public record BatchError(
         UUID executionId,
         String errorCode,
         String errorType,
-        String sanitizedMessage) {
+        String failureDetails) {
 }
-

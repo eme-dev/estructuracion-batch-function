@@ -66,7 +66,7 @@ CREATE TABLE ocrt.EstructuracionEjecucion
     fileHash          BINARY(32) NULL,
     recordCount       BIGINT NULL,
     contentLength     BIGINT NULL,
-    errorMessage      NVARCHAR(2000) NULL,
+    errorMessage      NVARCHAR(MAX) NULL,
 
     CONSTRAINT PK_EstructuracionEjecucion
         PRIMARY KEY (executionId),
@@ -115,20 +115,12 @@ CREATE TABLE ocrt.EstructuracionStaging
     encryptedDataMap    NVARCHAR(MAX) NOT NULL,
     listaTables         NVARCHAR(MAX) NOT NULL,
     documentType        VARCHAR(50) NOT NULL,
-    uniqueHash          BINARY(32) NOT NULL,
 
     CONSTRAINT PK_EstructuracionStaging
         PRIMARY KEY (stagingId),
 
-    CONSTRAINT FK_EstructuracionStaging_Ejecucion
-        FOREIGN KEY (executionId)
-        REFERENCES ocrt.EstructuracionEjecucion(executionId),
-
     CONSTRAINT UQ_EstructuracionStaging_ExecutionSource
-        UNIQUE (executionId, sourceId),
-
-    CONSTRAINT UQ_EstructuracionStaging_ExecutionHash
-        UNIQUE (executionId, uniqueHash)
+        UNIQUE (executionId, sourceId)
 );
 GO
 

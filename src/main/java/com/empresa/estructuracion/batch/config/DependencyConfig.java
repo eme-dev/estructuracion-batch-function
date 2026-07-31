@@ -2,9 +2,7 @@ package com.empresa.estructuracion.batch.config;
 
 import com.empresa.estructuracion.batch.repository.ExecutionRepository;
 import com.empresa.estructuracion.batch.repository.StagingRepository;
-import com.empresa.estructuracion.batch.service.EstructuracionBatchRepositories;
 import com.empresa.estructuracion.batch.service.EstructuracionBatchService;
-import com.empresa.estructuracion.batch.service.EstructuracionBatchServices;
 import com.empresa.estructuracion.batch.repository.impl.SqlExecutionRepository;
 import com.empresa.estructuracion.batch.repository.impl.SqlStagingRepository;
 import com.empresa.estructuracion.batch.service.impl.BlobStorageService;
@@ -39,9 +37,9 @@ public class DependencyConfig {
         SqlConfig sqlConfig = sqlConfig();
         StorageConfig storageConfig = storageConfig();
         KeyVaultConfig keyVaultConfig = keyVaultConfig();
-        BatchProperties batchProperties = batchProperties(storageConfig, keyVaultConfig);
-        EstructuracionBatchRepositories repositories = repositories(sqlConfig);
-        EstructuracionBatchServices services = services(
+        BatchProperties batchProperties = batchProperties();
+        RepositoryDependencies repositories = repositories(sqlConfig);
+        ServiceDependencies services = services(
                 batchProperties,
                 repositories,
                 storageConfig,
@@ -51,17 +49,17 @@ public class DependencyConfig {
         return new EstructuracionBatchService(batchProperties, repositories, services);
     }
 
-    private static EstructuracionBatchRepositories repositories(SqlConfig sqlConfig) {
+    private static RepositoryDependencies repositories(SqlConfig sqlConfig) {
         SqlConnectionProvider sqlConnectionProvider = new SqlConnectionProvider(sqlConfig);
         ExecutionRepository executionRepository = new SqlExecutionRepository(sqlConnectionProvider);
         StagingRepository stagingRepository = new SqlStagingRepository(sqlConnectionProvider);
 
-        return new EstructuracionBatchRepositories(executionRepository, stagingRepository);
+        return new RepositoryDependencies(executionRepository, stagingRepository);
     }
 
-    private static EstructuracionBatchServices services(
+    private static ServiceDependencies services(
             BatchProperties batchProperties,
-            EstructuracionBatchRepositories repositories,
+            RepositoryDependencies repositories,
             StorageConfig storageConfig,
             KeyVaultConfig keyVaultConfig,
             ObjectMapper objectMapper) {
@@ -77,7 +75,7 @@ public class DependencyConfig {
                 blobStorageService);
         DefaultTelemetryService telemetryService = new DefaultTelemetryService();
 
-        return new EstructuracionBatchServices(
+        return new ServiceDependencies(
                 outputService,
                 blobStorageService,
                 telemetryService);
@@ -106,16 +104,11 @@ public class DependencyConfig {
                 required("BATCH_WRAPPED_AES_SECRET_NAME"));
     }
 
-    private static BatchProperties batchProperties(StorageConfig storageConfig, KeyVaultConfig keyVaultConfig) {
+    private static BatchProperties batchProperties() {
         return new BatchProperties(
                 ZoneId.of(optional("BATCH_ZONE_ID", "America/Lima")),
                 integer("BATCH_SQL_BATCH_SIZE", 1000),
-                integer("BATCH_SQL_STALE_MINUTES", 15),
-                integer("BATCH_SQL_MAX_ATTEMPTS", 3),
-                storageConfig.containerName(),
-                keyVaultConfig.vaultUrl(),
-                keyVaultConfig.rsaKeyName(),
-                keyVaultConfig.wrappedAesSecretName());
+                integer("BATCH_SQL_STALE_MINUTES", 15));
     }
 
     private static String required(String name) {

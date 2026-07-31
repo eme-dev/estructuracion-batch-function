@@ -22,6 +22,6 @@ public class DefaultTelemetryService implements TelemetryService {
     @Override
     public void trackBatchFailed(Logger logger, BatchError error) {
         logger.severe("Batch failed. executionId=%s errorCode=%s errorType=%s message=%s"
-                .formatted(error.executionId(), error.errorCode(), error.errorType(), error.sanitizedMessage()));
+                .formatted(error.executionId(), error.errorCode(), error.errorType(), error.failureDetails()));
     }
 }

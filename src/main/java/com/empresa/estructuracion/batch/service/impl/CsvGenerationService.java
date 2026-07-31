@@ -9,7 +9,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.format.DateTimeFormatter;
-import java.util.HexFormat;
 import java.util.List;
 
 public class CsvGenerationService implements OutputWriterService {
@@ -21,8 +20,7 @@ public class CsvGenerationService implements OutputWriterService {
             "creationDateTime",
             "dataMap",
             "listaTables",
-            "documentType",
-            "uniqueHash"));
+            "documentType"));
 
     private final ObjectMapper objectMapper;
 
@@ -49,8 +47,7 @@ public class CsvGenerationService implements OutputWriterService {
                 DateTimeFormatter.ISO_INSTANT.format(record.creationDateTime()),
                 compactDataMap,
                 compactListaTables,
-                record.documentType(),
-                HexFormat.of().formatHex(record.uniqueHash())));
+                record.documentType()));
         byte[] bytes = line.getBytes(StandardCharsets.UTF_8);
         digest.update(bytes);
         return bytes;

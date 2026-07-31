@@ -7,7 +7,6 @@
     "BATCH_ZONE_ID": "America/Lima",
     "BATCH_SQL_CONNECTION_STRING": "jdbc:sqlserver://server.database.windows.net:1433;databaseName=db;user=user;password=password;encrypt=true;trustServerCertificate=false;",
     "BATCH_SQL_STALE_MINUTES": "15",
-    "BATCH_SQL_MAX_ATTEMPTS": "3",
     "BATCH_SQL_BATCH_SIZE": "1000",
     "BATCH_STORAGE_CONNECTION_STRING": "DefaultEndpointsProtocol=https;AccountName=...;AccountKey=...;EndpointSuffix=core.windows.net",
     "BATCH_STORAGE_CONTAINER": "exports",

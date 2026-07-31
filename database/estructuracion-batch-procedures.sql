@@ -115,8 +115,7 @@ BEGIN
         creationDateTime,
         encryptedDataMap,
         listaTables,
-        documentType,
-        uniqueHash
+        documentType
     )
     SELECT
         @ExecutionId,
@@ -127,8 +126,7 @@ BEGIN
         e.creationDateTime,
         e.dataMap,
         e.listaTables,
-        e.documentType,
-        e.uniqueHash
+        e.documentType
     FROM ocrt.Estructuracion e
     WHERE e.statusFile = 1
       AND (@MaxSourceId IS NULL OR e.id <= @MaxSourceId)
@@ -246,8 +244,7 @@ BEGIN
            creationDateTime,
            encryptedDataMap,
            listaTables,
-           documentType,
-           uniqueHash
+           documentType
     FROM ocrt.EstructuracionStaging
     WHERE executionId = @ExecutionId
       AND sourceId > @LastSourceId
@@ -291,7 +288,7 @@ GO
 CREATE OR ALTER PROCEDURE ocrt.usp_FailEstructuracionExecution
     @ExecutionId UNIQUEIDENTIFIER,
     @ErrorCode NVARCHAR(100),
-    @ErrorMessage NVARCHAR(2000),
+    @ErrorMessage NVARCHAR(MAX),
     @Now DATETIME2(3)
 AS
 BEGIN

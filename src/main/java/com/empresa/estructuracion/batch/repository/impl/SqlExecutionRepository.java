@@ -6,6 +6,7 @@ import com.empresa.estructuracion.batch.model.BatchResult;
 import com.empresa.estructuracion.batch.model.BusinessDateCutoff;
 import com.empresa.estructuracion.batch.model.ExecutionContext;
 import com.empresa.estructuracion.batch.repository.ExecutionRepository;
+import com.empresa.estructuracion.batch.repository.mapper.EstructuracionExecutionRowMapper;
 
 import java.sql.CallableStatement;
 import java.sql.Connection;
@@ -93,13 +94,13 @@ public class SqlExecutionRepository implements ExecutionRepository {
     }
 
     @Override
-    public void fail(UUID executionId, String errorCode, String sanitizedMessage, LocalDateTime now) {
+    public void fail(UUID executionId, String errorCode, String failureDetails, LocalDateTime now) {
         String sql = "{call ocrt.usp_FailEstructuracionExecution(?, ?, ?, ?)}";
         try (Connection connection = connectionProvider.getConnection();
              CallableStatement statement = connection.prepareCall(sql)) {
             statement.setObject(1, executionId);
             statement.setString(2, errorCode);
-            statement.setString(3, sanitizedMessage);
+            statement.setString(3, failureDetails);
             statement.setTimestamp(4, timestamp(now));
             statement.execute();
         } catch (Exception ex) {

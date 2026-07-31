@@ -11,7 +11,5 @@ public record StagingRecord(
         Instant creationDateTime,
         String encryptedDataMap,
         String listaTables,
-        String documentType,
-        byte[] uniqueHash) {
+        String documentType) {
 }
-

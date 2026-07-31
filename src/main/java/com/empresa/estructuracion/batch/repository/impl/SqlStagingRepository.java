@@ -4,6 +4,7 @@ import com.empresa.estructuracion.batch.config.SqlConnectionProvider;
 import com.empresa.estructuracion.batch.exception.RepositoryException;
 import com.empresa.estructuracion.batch.model.StagingRecord;
 import com.empresa.estructuracion.batch.repository.StagingRepository;
+import com.empresa.estructuracion.batch.repository.mapper.StagingRecordRowMapper;
 
 import java.sql.CallableStatement;
 import java.sql.Connection;

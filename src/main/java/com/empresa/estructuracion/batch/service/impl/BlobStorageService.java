@@ -16,10 +16,14 @@ public class BlobStorageService implements StoragePublisherService {
     private final BlobContainerClient containerClient;
 
     public BlobStorageService(StorageConfig storageConfig) {
-        this.containerClient = new BlobServiceClientBuilder()
+        this(new BlobServiceClientBuilder()
                 .connectionString(storageConfig.connectionString())
                 .buildClient()
-                .getBlobContainerClient(storageConfig.containerName());
+                .getBlobContainerClient(storageConfig.containerName()));
+    }
+
+    BlobStorageService(BlobContainerClient containerClient) {
+        this.containerClient = containerClient;
     }
 
     @Override

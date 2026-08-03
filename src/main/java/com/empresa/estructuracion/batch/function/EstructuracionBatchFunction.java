@@ -22,6 +22,10 @@ public class EstructuracionBatchFunction {
         this.batchService = dependencyConfig.estructuracionBatchService();
     }
 
+    EstructuracionBatchFunction(EstructuracionBatchService batchService) {
+        this.batchService = batchService;
+    }
+
     @FunctionName("EstructuracionBatch")
     public void run(
             @TimerTrigger(name = "timer", schedule = "%BATCH_TIMER_CRON%") String timerInfo,

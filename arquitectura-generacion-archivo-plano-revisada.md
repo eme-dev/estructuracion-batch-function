@@ -490,38 +490,41 @@ El snapshot utiliza ese límite:
 ```sql
 DELETE FROM ocrt.EstructuracionStaging;
 
-INSERT INTO ocrt.EstructuracionStaging
-(
-    executionId,
-    sourceId,
-    fileName,
-    statusFile,
-    clientName,
-    creationDateTime,
-    dataMap,
-    documentType,
-    isReprocessed,
-    reprocessDateTime,
-    reprocessCount
-)
-SELECT
-    @ExecutionId,
-    e.id,
-    e.fileName,
-    e.statusFile,
-    e.clientName,
-    e.creationDateTime,
-    e.dataMap,
-    e.documentType,
-    e.isReprocessed,
-    e.reprocessDateTime,
-    e.reprocessCount
-FROM ocrt.Estructuracion e
-WHERE e.statusFile = 1
-  AND e.id <= @MaxSourceId
-  AND e.creationDateTime >= @CutoffFromUtc
-  AND e.creationDateTime <  @CutoffToUtc
-ORDER BY e.id;
+IF @MaxSourceId IS NOT NULL
+BEGIN
+    INSERT INTO ocrt.EstructuracionStaging
+    (
+        executionId,
+        sourceId,
+        fileName,
+        statusFile,
+        clientName,
+        creationDateTime,
+        dataMap,
+        documentType,
+        isReprocessed,
+        reprocessDateTime,
+        reprocessCount
+    )
+    SELECT
+        @ExecutionId,
+        e.id,
+        e.fileName,
+        e.statusFile,
+        e.clientName,
+        e.creationDateTime,
+        e.dataMap,
+        e.documentType,
+        e.isReprocessed,
+        e.reprocessDateTime,
+        e.reprocessCount
+    FROM ocrt.Estructuracion e
+    WHERE e.statusFile = 1
+      AND e.id <= @MaxSourceId
+      AND e.creationDateTime >= @CutoffFromUtc
+      AND e.creationDateTime <  @CutoffToUtc
+    ORDER BY e.id;
+END;
 ```
 
 No se utiliza:

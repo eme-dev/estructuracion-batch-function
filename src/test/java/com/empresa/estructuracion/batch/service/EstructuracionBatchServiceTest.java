@@ -14,6 +14,7 @@ import com.empresa.estructuracion.batch.repository.ExecutionRepository;
 import com.empresa.estructuracion.batch.repository.StagingRepository;
 import org.junit.jupiter.api.Test;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -78,6 +79,22 @@ class EstructuracionBatchServiceTest {
     }
 
     @Test
+    void executeShouldSupportDefaultClockConstructor() {
+        FakeExecutionRepository executionRepository = new FakeExecutionRepository();
+        executionRepository.recoverable = Optional.of(execution(ExecutionStatus.FAILED));
+        FakeOutputService outputService = new FakeOutputService();
+        EstructuracionBatchService service = new EstructuracionBatchService(
+                new BatchProperties(ZoneId.of("America/Lima"), 100, 15),
+                new RepositoryDependencies(executionRepository, new UnusedStagingRepository()),
+                new ServiceDependencies(outputService, new FakeStoragePublisherService(), new FakeTelemetryService()));
+
+        service.execute(LOGGER);
+
+        assertEquals(0, executionRepository.createCount);
+        assertSame(executionRepository.recoverable.orElseThrow(), outputService.execution);
+    }
+
+    @Test
     void executeShouldRequireManualReconciliationWhenRecoverableExecutionIsPublishing() {
         FakeExecutionRepository executionRepository = new FakeExecutionRepository();
         executionRepository.recoverable = Optional.of(execution(ExecutionStatus.PUBLISHING));
@@ -129,7 +146,8 @@ class EstructuracionBatchServiceTest {
         return new EstructuracionBatchService(
                 new BatchProperties(ZoneId.of("America/Lima"), 100, 15),
                 new RepositoryDependencies(executionRepository, new UnusedStagingRepository()),
-                new ServiceDependencies(outputService, storageService, telemetryService));
+                new ServiceDependencies(outputService, storageService, telemetryService),
+                Clock.fixed(Instant.parse("2026-08-01T05:10:00Z"), ZoneId.of("UTC")));
     }
 
     private static ExecutionContext execution(ExecutionStatus status) {

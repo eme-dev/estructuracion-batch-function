@@ -68,7 +68,7 @@ BEGIN
     IF @LockResult < 0
         THROW 51001, 'No se pudo obtener lock aplicativo para businessDate.', 1;
 
-    DELETE FROM ocrt.EstructuracionStaging;
+    TRUNCATE TABLE ocrt.EstructuracionStaging;
 
     INSERT INTO ocrt.EstructuracionEjecucion
     (
@@ -107,38 +107,19 @@ BEGIN
 
     IF @MaxSourceId IS NOT NULL
     BEGIN
-        INSERT INTO ocrt.EstructuracionStaging
+        INSERT INTO ocrt.EstructuracionStaging WITH (TABLOCK)
         (
             executionId,
-            sourceId,
-            fileName,
-            statusFile,
-            clientName,
-            creationDateTime,
-            dataMap,
-            documentType,
-            isReprocessed,
-            reprocessDateTime,
-            reprocessCount
+            sourceId
         )
         SELECT
             @ExecutionId,
-            e.id,
-            e.fileName,
-            e.statusFile,
-            e.clientName,
-            e.creationDateTime,
-            e.dataMap,
-            e.documentType,
-            e.isReprocessed,
-            e.reprocessDateTime,
-            e.reprocessCount
+            e.id
         FROM ocrt.Estructuracion e
         WHERE e.statusFile = 1
           AND e.id <= @MaxSourceId
           AND e.creationDateTime >= @CutoffFromUtc
-          AND e.creationDateTime <  @CutoffToUtc
-        ORDER BY e.id;
+          AND e.creationDateTime <  @CutoffToUtc;
     END;
 
     SELECT
@@ -243,21 +224,23 @@ BEGIN
     SET NOCOUNT ON;
 
     SELECT TOP (@BatchSize)
-           stagingId,
-           sourceId,
-           fileName,
-           statusFile,
-           clientName,
-           creationDateTime,
-           dataMap,
-           documentType,
-           isReprocessed,
-           reprocessDateTime,
-           reprocessCount
-    FROM ocrt.EstructuracionStaging
-    WHERE executionId = @ExecutionId
-      AND sourceId > @LastSourceId
-    ORDER BY sourceId;
+           CAST(s.sourceId AS BIGINT) AS stagingId,
+           s.sourceId,
+           e.fileName,
+           e.statusFile,
+           e.clientName,
+           e.creationDateTime,
+           e.dataMap,
+           e.documentType,
+           e.isReprocessed,
+           e.reprocessDateTime,
+           e.reprocessCount
+    FROM ocrt.EstructuracionStaging s
+    INNER JOIN ocrt.Estructuracion e
+        ON e.id = s.sourceId
+    WHERE s.executionId = @ExecutionId
+      AND s.sourceId > @LastSourceId
+    ORDER BY s.sourceId;
 END;
 GO
 

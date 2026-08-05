@@ -109,32 +109,10 @@ GO
 
 CREATE TABLE ocrt.EstructuracionStaging
 (
-    stagingId           BIGINT IDENTITY(1,1) NOT NULL,
     executionId         UNIQUEIDENTIFIER NOT NULL,
     sourceId            INT NOT NULL,
 
-    fileName            NVARCHAR(MAX) NOT NULL,
-    statusFile          BIT NOT NULL,
-    clientName          NVARCHAR(MAX) NOT NULL,
-    creationDateTime    DATETIME NOT NULL,
-    dataMap             NVARCHAR(MAX) NOT NULL,
-    documentType        VARCHAR(50) NOT NULL,
-    isReprocessed       BIT NOT NULL,
-    reprocessDateTime   DATETIME NULL,
-    reprocessCount      INT NOT NULL,
-
     CONSTRAINT PK_EstructuracionStaging
-        PRIMARY KEY (stagingId),
-
-    CONSTRAINT UQ_EstructuracionStaging_ExecutionSource
-        UNIQUE (executionId, sourceId)
-);
-GO
-
-CREATE INDEX IX_EstructuracionStaging_ExecutionSource
-ON ocrt.EstructuracionStaging
-(
-    executionId,
-    sourceId
+        PRIMARY KEY CLUSTERED (executionId, sourceId)
 );
 GO

@@ -8,7 +8,7 @@
 La solución utiliza únicamente dos tablas técnicas:
 
 1. `ocrt.EstructuracionEjecucion`: cabecera y control global de cada ejecución.
-2. `ocrt.EstructuracionStaging`: snapshot completo de los registros que pertenecen a la ejecución.
+2. `ocrt.EstructuracionStaging`: snapshot liviano de IDs que pertenecen a la ejecución.
 
 La tabla fuente del negocio es `ocrt.Estructuracion`. Esta tabla permanece sin columnas ni estados técnicos del proceso batch.
 
@@ -336,33 +336,11 @@ EXEC @LockResult = sp_getapplock
 ```sql
 CREATE TABLE ocrt.EstructuracionStaging
 (
-    stagingId           BIGINT IDENTITY(1,1) NOT NULL,
     executionId         UNIQUEIDENTIFIER NOT NULL,
     sourceId            INT NOT NULL,
 
-    fileName            NVARCHAR(MAX) NOT NULL,
-    statusFile          BIT NOT NULL,
-    clientName          NVARCHAR(MAX) NOT NULL,
-    creationDateTime    DATETIME NOT NULL,
-    dataMap             NVARCHAR(MAX) NOT NULL,
-    documentType        VARCHAR(50) NOT NULL,
-    isReprocessed       BIT NOT NULL,
-    reprocessDateTime   DATETIME NULL,
-    reprocessCount      INT NOT NULL,
-
     CONSTRAINT PK_EstructuracionStaging
-        PRIMARY KEY (stagingId),
-
-    CONSTRAINT UQ_EstructuracionStaging_ExecutionSource
-        UNIQUE (executionId, sourceId)
-);
-GO
-
-CREATE INDEX IX_EstructuracionStaging_ExecutionSource
-ON ocrt.EstructuracionStaging
-(
-    executionId,
-    sourceId
+        PRIMARY KEY CLUSTERED (executionId, sourceId)
 );
 GO
 
@@ -371,7 +349,8 @@ GO
 ### 5.5 Decisiones del modelo
 
 - No se crea FK desde staging hacia `ocrt.Estructuracion`.
-- `sourceId` es una referencia lógica.
+- `sourceId` es una referencia lógica al `id` de `ocrt.Estructuracion`.
+- Staging no copia `dataMap` ni columnas de negocio; congela únicamente la lista de IDs del corte.
 - No se agrega estado `InProgress` por registro.
 - Los intentos pertenecen a la ejecución, no a cada fila.
 - Los conteos se obtienen desde staging.
@@ -417,18 +396,8 @@ erDiagram
     }
 
     ESTRUCTURACION_STAGING {
-        BIGINT stagingId PK
-        UNIQUEIDENTIFIER executionId
-        INT sourceId
-        NVARCHAR fileName
-        BIT statusFile
-        NVARCHAR clientName
-        DATETIME creationDateTime
-        NVARCHAR dataMap
-        VARCHAR documentType
-        BIT isReprocessed
-        DATETIME reprocessDateTime
-        INT reprocessCount
+        UNIQUEIDENTIFIER executionId PK
+        INT sourceId PK
     }
 ```
 
@@ -488,42 +457,23 @@ WHERE creationDateTime >= @CutoffFromUtc
 El snapshot utiliza ese límite:
 
 ```sql
-DELETE FROM ocrt.EstructuracionStaging;
+TRUNCATE TABLE ocrt.EstructuracionStaging;
 
 IF @MaxSourceId IS NOT NULL
 BEGIN
-    INSERT INTO ocrt.EstructuracionStaging
+    INSERT INTO ocrt.EstructuracionStaging WITH (TABLOCK)
     (
         executionId,
-        sourceId,
-        fileName,
-        statusFile,
-        clientName,
-        creationDateTime,
-        dataMap,
-        documentType,
-        isReprocessed,
-        reprocessDateTime,
-        reprocessCount
+        sourceId
     )
     SELECT
         @ExecutionId,
-        e.id,
-        e.fileName,
-        e.statusFile,
-        e.clientName,
-        e.creationDateTime,
-        e.dataMap,
-        e.documentType,
-        e.isReprocessed,
-        e.reprocessDateTime,
-        e.reprocessCount
+        e.id
     FROM ocrt.Estructuracion e
     WHERE e.statusFile = 1
       AND e.id <= @MaxSourceId
       AND e.creationDateTime >= @CutoffFromUtc
-      AND e.creationDateTime <  @CutoffToUtc
-    ORDER BY e.id;
+      AND e.creationDateTime <  @CutoffToUtc;
 END;
 ```
 
@@ -560,21 +510,23 @@ Consulta:
 
 ```sql
 SELECT TOP (@BatchSize)
-       stagingId,
-       sourceId,
-       fileName,
-       statusFile,
-       clientName,
-       creationDateTime,
-       dataMap,
-       documentType,
-       isReprocessed,
-       reprocessDateTime,
-       reprocessCount
-FROM ocrt.EstructuracionStaging
-WHERE executionId = @ExecutionId
-  AND sourceId > @LastSourceId
-ORDER BY sourceId;
+       CAST(s.sourceId AS BIGINT) AS stagingId,
+       s.sourceId,
+       e.fileName,
+       e.statusFile,
+       e.clientName,
+       e.creationDateTime,
+       e.dataMap,
+       e.documentType,
+       e.isReprocessed,
+       e.reprocessDateTime,
+       e.reprocessCount
+FROM ocrt.EstructuracionStaging s
+INNER JOIN ocrt.Estructuracion e
+    ON e.id = s.sourceId
+WHERE s.executionId = @ExecutionId
+  AND s.sourceId > @LastSourceId
+ORDER BY s.sourceId;
 ```
 
 Después de procesar el lote:
@@ -687,7 +639,7 @@ Política inicial sugerida:
 Ejemplo:
 
 ```sql
-DELETE FROM ocrt.EstructuracionStaging;
+TRUNCATE TABLE ocrt.EstructuracionStaging;
 ```
 
 ---

@@ -28,23 +28,33 @@ public class EstructuracionBatchService {
     private final OutputService outputService;
     private final StoragePublisherService blobStorageService;
     private final TelemetryService telemetryService;
+    private final Clock clock;
 
     public EstructuracionBatchService(
             BatchProperties properties,
             RepositoryDependencies repositories,
             ServiceDependencies services) {
+        this(properties, repositories, services, Clock.systemUTC());
+    }
+
+    EstructuracionBatchService(
+            BatchProperties properties,
+            RepositoryDependencies repositories,
+            ServiceDependencies services,
+            Clock clock) {
         this.properties = properties;
         this.executionRepository = repositories.executionRepository();
         this.outputService = services.outputService();
         this.blobStorageService = services.storagePublisherService();
         this.telemetryService = services.telemetryService();
+        this.clock = clock;
     }
 
     public void execute(Logger logger) {
         ExecutionContext execution = null;
         try {
             BusinessDateCutoff cutoff = BusinessDateCalculator.previousBusinessDate(
-                    Clock.systemUTC(),
+                    clock,
                     properties.zoneId());
             Optional<ExecutionContext> recoverable =
                     executionRepository.findRecoverableExecution(properties.staleMinutes(), now());

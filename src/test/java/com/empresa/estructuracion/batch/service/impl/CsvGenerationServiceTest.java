@@ -24,8 +24,8 @@ class CsvGenerationServiceTest {
         String header = new String(service.headerBytes(digest), StandardCharsets.UTF_8);
 
         assertEquals(
-                "fileName,statusFile,clientName,creationDateTime,dataMap,listaTables,documentType,"
-                        + "isReprocessed,reprocessDateTime,reprocessCount\n",
+                "fileName|statusFile|clientName|creationDateTime|dataMap|listaTables|documentType|"
+                        + "isReprocessed|reprocessDateTime|reprocessCount\n",
                 header);
     }
 
@@ -45,8 +45,8 @@ class CsvGenerationServiceTest {
                 digest), StandardCharsets.UTF_8);
 
         assertEquals(
-                "archivo-demo.pdf,true,Juan Perez,2026-07-17T10:30:00Z,"
-                        + "\"{\"\"cliente\"\":\"\"Juan Perez\"\",\"\"monto\"\":100.5}\",,DNI,false,,0\n",
+                "archivo-demo.pdf|true|Juan Perez|2026-07-17T10:30:00Z|"
+                        + "\"{\"\"cliente\"\":\"\"Juan Perez\"\",\"\"monto\"\":100.5}\"||DNI|false||0\n",
                 row);
     }
 
@@ -61,8 +61,8 @@ class CsvGenerationServiceTest {
                 digest), StandardCharsets.UTF_8);
 
         assertEquals(
-                "archivo-demo.pdf,true,Juan Perez,2026-07-17T10:30:00Z,"
-                        + "\"{\"\"cliente\"\":\"\"Juan Perez\"\"}\",,DNI,true,2026-07-18T08:15:30Z,2\n",
+                "archivo-demo.pdf|true|Juan Perez|2026-07-17T10:30:00Z|"
+                        + "\"{\"\"cliente\"\":\"\"Juan Perez\"\"}\"||DNI|true|2026-07-18T08:15:30Z|2\n",
                 row);
     }
 

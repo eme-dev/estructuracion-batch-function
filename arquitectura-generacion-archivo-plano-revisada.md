@@ -656,12 +656,12 @@ Contrato inicial recomendado:
 
 - extensión `.csv`;
 - codificación UTF-8 sin BOM;
-- separador de columnas `,`;
+- separador de columnas `|`;
 - salto de línea `LF`;
 - primera línea con encabezados;
 - valores nulos representados como campo vacío;
 - fechas en formato ISO 8601;
-- campos de texto entre comillas cuando contengan coma, comillas dobles, CR o LF;
+- campos de texto entre comillas cuando contengan pipe (`|`), comillas dobles, CR o LF;
 - comillas dobles internas escapadas duplicándolas;
 - `dataMap` descifrado, validado como JSON y compactado antes de escribirlo como una columna CSV;
 - `listaTables` emitido vacio por contrato del consumidor.
@@ -669,14 +669,14 @@ Contrato inicial recomendado:
 Columnas iniciales:
 
 ```text
-fileName,statusFile,clientName,creationDateTime,dataMap,listaTables,documentType,isReprocessed,reprocessDateTime,reprocessCount
+fileName|statusFile|clientName|creationDateTime|dataMap|listaTables|documentType|isReprocessed|reprocessDateTime|reprocessCount
 ```
 
 Ejemplo:
 
 ```csv
-fileName,statusFile,clientName,creationDateTime,dataMap,listaTables,documentType,isReprocessed,reprocessDateTime,reprocessCount
-documento.pdf,true,Cliente,2026-07-15T10:00:00Z,"{""campo"":""valor""}",,FACTURA,false,,0
+fileName|statusFile|clientName|creationDateTime|dataMap|listaTables|documentType|isReprocessed|reprocessDateTime|reprocessCount
+documento.pdf|true|Cliente|2026-07-15T10:00:00Z|"{""campo"":""valor""}"||FACTURA|false||0
 ```
 
 El CSV debe generarse mediante streaming. No se debe construir el archivo completo en memoria.

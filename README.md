@@ -21,10 +21,10 @@ El archivo final usa extension `.csv` y content type `text/csv; charset=utf-8`.
 Columnas:
 
 ```csv
-fileName,statusFile,clientName,creationDateTime,dataMap,listaTables,documentType,isReprocessed,reprocessDateTime,reprocessCount
+fileName|statusFile|clientName|creationDateTime|dataMap|listaTables|documentType|isReprocessed|reprocessDateTime|reprocessCount
 ```
 
-`dataMap` se escribe como JSON compacto dentro de una columna CSV. `listaTables` se emite vacio por contrato del consumidor. Las comillas internas se escapan segun el formato CSV estandar.
+`dataMap` se escribe como JSON compacto dentro de una columna CSV delimitada por `|`. `listaTables` se emite vacio por contrato del consumidor. Las comillas internas se escapan segun el formato CSV estandar.
 
 En la tabla origen, `dataMap` debe llegar como un string Base64 que contiene `IV + ciphertext`. Para AES/GCM el IV esperado es de 12 bytes y el `ciphertext` debe incluir el tag de autenticacion.
 
@@ -33,7 +33,7 @@ Durante la transicion inicial se acepta tambien `dataMap` como JSON plano estruc
 Ejemplo de una fila:
 
 ```csv
-archivo-demo-001.pdf,1,Juan Perez,2026-07-17T10:30:00Z,"{""cliente"":""Juan Perez"",""tipoDocumento"":""DNI""}",,DNI,false,,0
+archivo-demo-001.pdf|1|Juan Perez|2026-07-17T10:30:00Z|"{""cliente"":""Juan Perez"",""tipoDocumento"":""DNI""}"||DNI|false||0
 ```
 
 ## Configuracion local

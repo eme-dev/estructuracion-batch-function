@@ -4,20 +4,22 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public final class CsvUtils {
+    private static final String DELIMITER = "|";
+
     private CsvUtils() {
     }
 
     public static String line(List<String> values) {
         return values.stream()
                 .map(CsvUtils::escape)
-                .collect(Collectors.joining(",")) + "\n";
+                .collect(Collectors.joining(DELIMITER)) + "\n";
     }
 
     public static String escape(String value) {
         if (value == null) {
             return "";
         }
-        boolean mustQuote = value.contains(",")
+        boolean mustQuote = value.contains(DELIMITER)
                 || value.contains("\"")
                 || value.contains("\r")
                 || value.contains("\n");
@@ -25,4 +27,3 @@ public final class CsvUtils {
         return mustQuote ? "\"" + escaped + "\"" : escaped;
     }
 }
-

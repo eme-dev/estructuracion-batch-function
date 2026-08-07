@@ -10,20 +10,20 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class CsvUtilsTest {
 
     @Test
-    void lineShouldJoinSimpleValuesWithCommaAndLineFeed() {
+    void lineShouldJoinSimpleValuesWithPipeAndLineFeed() {
         String line = CsvUtils.line(List.of("file.pdf", "true", "Cliente"));
 
-        assertEquals("file.pdf,true,Cliente\n", line);
+        assertEquals("file.pdf|true|Cliente\n", line);
     }
 
     @Test
-    void lineShouldEscapeValuesThatContainCommaQuoteOrLineBreak() {
+    void lineShouldEscapeValuesThatContainPipeQuoteOrLineBreak() {
         String line = CsvUtils.line(List.of(
-                "Juan, Perez",
+                "Juan|Perez",
                 "texto \"con comillas\"",
                 "linea\nnueva"));
 
-        assertEquals("\"Juan, Perez\",\"texto \"\"con comillas\"\"\",\"linea\nnueva\"\n", line);
+        assertEquals("\"Juan|Perez\"|\"texto \"\"con comillas\"\"\"|\"linea\nnueva\"\n", line);
     }
 
     @Test
@@ -35,7 +35,12 @@ class CsvUtilsTest {
 
         String line = CsvUtils.line(values);
 
-        assertEquals("inicio,,fin\n", line);
+        assertEquals("inicio||fin\n", line);
+    }
+
+    @Test
+    void escapeShouldLeaveCommaWithoutQuotesWhenDelimiterIsPipe() {
+        assertEquals("Juan, Perez", CsvUtils.escape("Juan, Perez"));
     }
 
     @Test

@@ -9,7 +9,7 @@ Azure Function Java 21 para generar un archivo CSV diario a partir del snapshot 
 3. Registro de ejecucion en `Preparing`.
 4. Creacion del snapshot en staging.
 5. Lectura por lotes.
-6. Desencriptado de `dataMap`.
+6. Resolucion de `dataMap`: JSON plano transitorio o desencriptado.
 7. Validacion de JSON.
 8. Generacion CSV por bloques no confirmados.
 9. Publicacion del CSV y cierre SQL.
@@ -27,6 +27,8 @@ fileName,statusFile,clientName,creationDateTime,dataMap,listaTables,documentType
 `dataMap` se escribe como JSON compacto dentro de una columna CSV. `listaTables` se emite vacio por contrato del consumidor. Las comillas internas se escapan segun el formato CSV estandar.
 
 En la tabla origen, `dataMap` debe llegar como un string Base64 que contiene `IV + ciphertext`. Para AES/GCM el IV esperado es de 12 bytes y el `ciphertext` debe incluir el tag de autenticacion.
+
+Durante la transicion inicial se acepta tambien `dataMap` como JSON plano estructurado (`{}` o `[]`). Si parsea como JSON estructurado se usa directamente; si no parsea, se intenta desencriptar. Esta compatibilidad debe retirarse cuando el origen envie todo cifrado.
 
 Ejemplo de una fila:
 

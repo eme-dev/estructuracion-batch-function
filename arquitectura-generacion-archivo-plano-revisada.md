@@ -139,8 +139,8 @@ El límite real debe controlarse también por bytes, porque `dataMap` y `listaTa
 | RF-04 | Leer staging por lotes usando keyset pagination. | No se usa `OFFSET`; no se omiten filas. |
 | RF-04A | Calcular el corte de negocio desde la ejecución a las 00:10. | Una ejecución local del `2026-07-18 00:10` procesa exclusivamente `businessDate = 2026-07-17`. |
 | RF-05 | Obtener y desenvolver la clave AES una sola vez. | No existe una llamada a Key Vault por registro. |
-| RF-06 | Descifrar `dataMap`. | El plaintext coincide con vectores criptográficos de prueba. |
-| RF-07 | Validar que `dataMap` desencriptado sea JSON válido. | Una fila con `dataMap` inválido impide confirmar el archivo. |
+| RF-06 | Resolver `dataMap` como JSON plano transitorio o como contenido cifrado. | El JSON plano estructurado se acepta temporalmente; si no es JSON plano, se desencripta con AES/GCM. |
+| RF-07 | Validar que el `dataMap` final sea JSON válido. | Una fila con `dataMap` inválido impide confirmar el archivo. |
 | RF-08 | Generar el archivo progresivamente. | La memoria no crece con el total de registros. |
 | RF-09 | Confirmar el archivo de forma atómica. | El consumidor no observa contenido parcial. |
 | RF-10 | Registrar trazabilidad del archivo en SQL. | `EstructuracionEjecucion` conserva archivo, conteo, tamaño y SHA-256. |
@@ -541,13 +541,15 @@ lastSourceId = máximo sourceId leído
 
 Por cada fila:
 
-1. descifrar `dataMap`;
-2. validar autenticación criptográfica;
-3. validar que el `dataMap` desencriptado sea JSON válido;
-4. compactar el JSON para escribirlo como columna CSV;
-5. construir la línea CSV;
-6. actualizar conteo y controles del archivo;
-7. escribir al buffer.
+1. validar si `dataMap` es JSON plano estructurado (`{}` o `[]`);
+2. si es JSON plano válido, usarlo directamente como compatibilidad transitoria;
+3. si no es JSON plano, descifrar `dataMap`;
+4. validar autenticación criptográfica;
+5. validar que el resultado final sea JSON válido;
+6. compactar el JSON para escribirlo como columna CSV;
+7. construir la línea CSV;
+8. actualizar conteo y controles del archivo;
+9. escribir al buffer.
 
 Si una fila falla:
 
@@ -839,7 +841,7 @@ sequenceDiagram
             STG-->>Fn: Lote cifrado
 
             loop Por cada registro
-                Fn->>Fn: Descifrar dataMap
+                Fn->>Fn: Resolver dataMap plano o cifrado
                 Fn->>Fn: Validar dataMap como JSON válido
                 Fn->>Fn: Construir línea CSV
                 Fn->>Fn: Actualizar conteo y controles del archivo
@@ -903,7 +905,7 @@ sequenceDiagram
     Fn->>STG: Leer staging por lotes
 
     loop Por cada lote
-        Fn->>Fn: Desencriptar dataMap y validar JSON
+        Fn->>Fn: Resolver dataMap y validar JSON
         Fn->>Fn: Construir líneas CSV
         Fn->>Blob: Cargar bloque no confirmado
         Fn->>SQL: Actualizar señal de vida de la ejecución

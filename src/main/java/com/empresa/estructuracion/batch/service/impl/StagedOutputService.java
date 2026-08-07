@@ -13,6 +13,7 @@ import com.empresa.estructuracion.batch.service.OutputWriterService;
 import com.empresa.estructuracion.batch.service.StoragePublisherService;
 import com.empresa.estructuracion.batch.util.FileNameUtils;
 import com.empresa.estructuracion.batch.util.HashUtils;
+import com.empresa.estructuracion.batch.util.JsonUtils;
 
 import java.io.ByteArrayOutputStream;
 import java.security.MessageDigest;
@@ -82,8 +83,8 @@ public class StagedOutputService implements OutputService {
             }
 
             for (StagingRecord stagingRecord : records) {
-                String decryptedDataMap = cryptoService.decryptDataMap(stagingRecord.dataMap(), aesKey);
-                byte[] row = outputWriterService.rowBytes(stagingRecord, decryptedDataMap, digest);
+                String plainDataMap = resolvePlainDataMap(stagingRecord, aesKey);
+                byte[] row = outputWriterService.rowBytes(stagingRecord, plainDataMap, digest);
                 block.writeBytes(row);
                 contentLength += row.length;
                 recordCount++;
@@ -107,6 +108,14 @@ public class StagedOutputService implements OutputService {
                 recordCount,
                 contentLength,
                 digest.digest());
+    }
+
+    private String resolvePlainDataMap(StagingRecord stagingRecord, byte[] aesKey) {
+        String dataMap = stagingRecord.dataMap();
+        if (JsonUtils.isStructuredJson(dataMap)) {
+            return dataMap;
+        }
+        return cryptoService.decryptDataMap(dataMap, aesKey);
     }
 
     private LocalDateTime now() {

@@ -92,6 +92,26 @@ class StagedOutputServiceTest {
         assertEquals(0, executionRepository.heartbeatCount);
     }
 
+    @Test
+    void generateShouldUsePlainJsonDataMapWithoutDecrypting() {
+        FakeStagingRepository stagingRepository = new FakeStagingRepository(List.of(
+                record(10, "{\"cliente\":\"Juan Perez\"}")));
+        FakeCryptoService cryptoService = new FakeCryptoService();
+        FakeStoragePublisherService storageService = new FakeStoragePublisherService();
+        StagedOutputService service = service(
+                stagingRepository,
+                new FakeExecutionRepository(),
+                cryptoService,
+                new FakeOutputWriterService(),
+                storageService,
+                100);
+
+        service.generate(execution());
+
+        assertEquals("header\nrow-10-{\"cliente\":\"Juan Perez\"}\n", storageService.blocks.get(0));
+        assertEquals(0, cryptoService.decryptCount);
+    }
+
     private StagedOutputService service(
             StagingRepository stagingRepository,
             ExecutionRepository executionRepository,
@@ -200,6 +220,7 @@ class StagedOutputServiceTest {
     private static class FakeCryptoService implements DataMapCryptoService {
         private final byte[] key = new byte[]{1, 2, 3};
         private boolean clearKeyCalled;
+        private int decryptCount;
 
         @Override
         public byte[] unwrapAesKey() {
@@ -209,6 +230,7 @@ class StagedOutputServiceTest {
         @Override
         public String decryptDataMap(String dataMap, byte[] aesKey) {
             assertArrayEquals(key, aesKey);
+            decryptCount++;
             return "plain-" + dataMap;
         }
 

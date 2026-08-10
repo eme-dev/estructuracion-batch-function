@@ -25,12 +25,13 @@ public class SqlExecutionRepository implements ExecutionRepository {
     }
 
     @Override
-    public Optional<ExecutionContext> findRecoverableExecution(int staleMinutes, LocalDateTime now) {
-        String sql = "{call ocrt.usp_FindRecoverableEstructuracionExecution(?, ?)}";
+    public Optional<ExecutionContext> findRecoverableExecution(int staleMinutes, int maxAttempts, LocalDateTime now) {
+        String sql = "{call ocrt.usp_FindRecoverableEstructuracionExecution(?, ?, ?)}";
         try (Connection connection = connectionProvider.getConnection();
              CallableStatement statement = connection.prepareCall(sql)) {
             statement.setInt(1, staleMinutes);
-            statement.setTimestamp(2, timestamp(now));
+            statement.setInt(2, maxAttempts);
+            statement.setTimestamp(3, timestamp(now));
             try (ResultSet rs = statement.executeQuery()) {
                 return rs.next() ? Optional.of(rowMapper.map(rs)) : Optional.empty();
             }
@@ -40,8 +41,8 @@ public class SqlExecutionRepository implements ExecutionRepository {
     }
 
     @Override
-    public ExecutionContext createExecutionWithSnapshot(BusinessDateCutoff cutoff, LocalDateTime now) {
-        String sql = "{call ocrt.usp_CreateEstructuracionExecutionSnapshot(?, ?, ?, ?, ?)}";
+    public ExecutionContext createExecutionWithSnapshot(BusinessDateCutoff cutoff, int maxAttempts, LocalDateTime now) {
+        String sql = "{call ocrt.usp_CreateEstructuracionExecutionSnapshot(?, ?, ?, ?, ?, ?)}";
         UUID executionId = UUID.randomUUID();
         try (Connection connection = connectionProvider.getConnection();
              CallableStatement statement = connection.prepareCall(sql)) {
@@ -50,6 +51,7 @@ public class SqlExecutionRepository implements ExecutionRepository {
             statement.setTimestamp(3, Timestamp.from(cutoff.cutoffFromUtc()));
             statement.setTimestamp(4, Timestamp.from(cutoff.cutoffToUtc()));
             statement.setTimestamp(5, timestamp(now));
+            statement.setInt(6, maxAttempts);
             try (ResultSet rs = statement.executeQuery()) {
                 if (!rs.next()) {
                     throw new RepositoryException("Snapshot procedure did not return execution context.", null);
@@ -62,8 +64,17 @@ public class SqlExecutionRepository implements ExecutionRepository {
     }
 
     @Override
-    public void markInProgress(UUID executionId, LocalDateTime now) {
-        executeStateProcedure("{call ocrt.usp_MarkEstructuracionInProgress(?, ?)}", executionId, now);
+    public void markInProgress(UUID executionId, boolean retryAttempt, LocalDateTime now) {
+        String sql = "{call ocrt.usp_MarkEstructuracionInProgress(?, ?, ?)}";
+        try (Connection connection = connectionProvider.getConnection();
+             CallableStatement statement = connection.prepareCall(sql)) {
+            statement.setObject(1, executionId);
+            statement.setBoolean(2, retryAttempt);
+            statement.setTimestamp(3, timestamp(now));
+            statement.execute();
+        } catch (Exception ex) {
+            throw new RepositoryException("Unable to update execution state.", ex);
+        }
     }
 
     @Override

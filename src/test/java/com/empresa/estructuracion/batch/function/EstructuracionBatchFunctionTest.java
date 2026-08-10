@@ -5,11 +5,15 @@ import com.microsoft.azure.functions.ExecutionContext;
 import com.microsoft.azure.functions.HttpRequestMessage;
 import com.microsoft.azure.functions.HttpResponseMessage;
 import com.microsoft.azure.functions.HttpStatus;
+import com.microsoft.azure.functions.annotation.ExponentialBackoffRetry;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Method;
 import java.util.Optional;
 import java.util.logging.Logger;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -27,6 +31,21 @@ class EstructuracionBatchFunctionTest {
         function.run("timer-info", context);
 
         verify(batchService).execute(logger);
+    }
+
+    @Test
+    void runShouldDeclareProductionRetryPolicy() throws Exception {
+        Method runMethod = EstructuracionBatchFunction.class.getMethod(
+                "run",
+                String.class,
+                ExecutionContext.class);
+
+        ExponentialBackoffRetry retry = runMethod.getAnnotation(ExponentialBackoffRetry.class);
+
+        assertNotNull(retry);
+        assertEquals(2, retry.maxRetryCount());
+        assertEquals("00:00:30", retry.minimumInterval());
+        assertEquals("00:10:00", retry.maximumInterval());
     }
 
     @Test

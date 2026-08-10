@@ -108,7 +108,8 @@ public class DependencyConfig {
         return new BatchProperties(
                 ZoneId.of(optional("BATCH_ZONE_ID", "America/Lima")),
                 integer("BATCH_SQL_BATCH_SIZE", 1000),
-                integer("BATCH_SQL_STALE_MINUTES", 15));
+                integer("BATCH_SQL_STALE_MINUTES", 15),
+                integer("BATCH_SQL_MAX_ATTEMPTS", 3));
     }
 
     private static String required(String name) {

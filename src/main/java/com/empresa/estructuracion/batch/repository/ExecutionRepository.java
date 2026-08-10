@@ -9,11 +9,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface ExecutionRepository {
-    Optional<ExecutionContext> findRecoverableExecution(int staleMinutes, LocalDateTime now);
+    Optional<ExecutionContext> findRecoverableExecution(int staleMinutes, int maxAttempts, LocalDateTime now);
 
-    ExecutionContext createExecutionWithSnapshot(BusinessDateCutoff cutoff, LocalDateTime now);
+    ExecutionContext createExecutionWithSnapshot(BusinessDateCutoff cutoff, int maxAttempts, LocalDateTime now);
 
-    void markInProgress(UUID executionId, LocalDateTime now);
+    void markInProgress(UUID executionId, boolean retryAttempt, LocalDateTime now);
 
     void updateHeartbeat(UUID executionId, LocalDateTime now);
 

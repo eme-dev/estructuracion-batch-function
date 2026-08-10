@@ -120,7 +120,7 @@ class StagedOutputServiceTest {
             StoragePublisherService storagePublisherService,
             int batchSize) {
         return new StagedOutputService(
-                new BatchProperties(ZoneId.of("America/Lima"), batchSize, 15),
+                new BatchProperties(ZoneId.of("America/Lima"), batchSize, 15, 3),
                 stagingRepository,
                 executionRepository,
                 cryptoService,
@@ -182,17 +182,23 @@ class StagedOutputServiceTest {
         private int heartbeatCount;
 
         @Override
-        public Optional<ExecutionContext> findRecoverableExecution(int staleMinutes, LocalDateTime now) {
+        public Optional<ExecutionContext> findRecoverableExecution(
+                int staleMinutes,
+                int maxAttempts,
+                LocalDateTime now) {
             return Optional.empty();
         }
 
         @Override
-        public ExecutionContext createExecutionWithSnapshot(BusinessDateCutoff cutoff, LocalDateTime now) {
+        public ExecutionContext createExecutionWithSnapshot(
+                BusinessDateCutoff cutoff,
+                int maxAttempts,
+                LocalDateTime now) {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public void markInProgress(UUID executionId, LocalDateTime now) {
+        public void markInProgress(UUID executionId, boolean retryAttempt, LocalDateTime now) {
             throw new UnsupportedOperationException();
         }
 

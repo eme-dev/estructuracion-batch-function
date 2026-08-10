@@ -303,7 +303,7 @@ GO
 
 CREATE UNIQUE INDEX UX_EstructuracionEjecucion_ActiveBusinessDate
 ON ocrt.EstructuracionEjecucion (businessDate)
-WHERE status IN ('Preparing', 'InProgress', 'Publishing', 'Completed');
+WHERE status IN ('Preparing', 'InProgress', 'Publishing', 'Completed', 'Failed');
 GO
 ```
 
@@ -417,20 +417,41 @@ SELECT TOP (1)
        fileName,
        fileHash
 FROM ocrt.EstructuracionEjecucion
-WHERE status IN ('Preparing', 'InProgress', 'Publishing', 'Failed')
-  AND
-  (
-      status = 'Failed'
-      OR heartbeatAt < DATEADD(MINUTE, -@StaleMinutes, @Now)
-  )
+WHERE
+(
+    status = 'Failed'
+    AND attemptCount < @MaxAttempts
+)
+OR
+(
+    status IN ('Preparing', 'InProgress')
+    AND attemptCount < @MaxAttempts
+    AND
+    (
+        heartbeatAt < DATEADD(MINUTE, -@StaleMinutes, @Now)
+        OR heartbeatAt IS NULL
+    )
+)
+OR
+(
+    status = 'Publishing'
+    AND
+    (
+        heartbeatAt < DATEADD(MINUTE, -@StaleMinutes, @Now)
+        OR heartbeatAt IS NULL
+    )
+)
 ORDER BY startedAt;
 ```
 
 Reglas:
 
 - `Publishing` con blob válido: completar SQL.
-- `Preparing`, `InProgress` o `Failed` sin archivo válido: reiniciar el mismo snapshot.
+- `Preparing`, `InProgress` o `Failed` sin archivo válido y con intentos disponibles: reiniciar el mismo snapshot e incrementar `attemptCount`.
+- `Failed` con `attemptCount >= BATCH_SQL_MAX_ATTEMPTS`: bloquear nuevo intento automático para esa fecha de negocio y requerir revisión operativa.
 - No iniciar el nuevo corte mientras exista una ejecución recuperable.
+
+El Timer Trigger usa retry exponencial para fallas técnicas transitorias. La política recomendada para esta fase es 1 intento inicial + 2 reintentos automáticos. `BATCH_SQL_MAX_ATTEMPTS=3` queda alineado con esa política y actúa como control funcional/auditable en SQL.
 
 ### 6.2 Crear una nueva ejecución
 
@@ -949,9 +970,9 @@ classDiagram
     }
 
     class ExecutionRepository {
-        +FindRecoverableExecutionAsync()
-        +CreateExecutionWithSnapshotAsync(cutoff)
-        +MarkInProgressAsync(executionId)
+        +FindRecoverableExecutionAsync(staleMinutes, maxAttempts)
+        +CreateExecutionWithSnapshotAsync(cutoff, maxAttempts)
+        +MarkInProgressAsync(executionId, retryAttempt)
         +UpdateHeartbeatAsync(executionId)
         +MarkPublishingAsync(executionId)
         +CompleteExecutionAsync(result)
@@ -1396,6 +1417,7 @@ BATCH_ZONE_ID=America/Lima
 BATCH_SQL_CONNECTION_STRING=...
 BATCH_SQL_BATCH_SIZE=1000
 BATCH_SQL_STALE_MINUTES=15
+BATCH_SQL_MAX_ATTEMPTS=3
 BATCH_STORAGE_CONNECTION_STRING=...
 BATCH_STORAGE_CONTAINER=exports
 BATCH_KEY_VAULT_URL=...
@@ -1414,6 +1436,7 @@ BATCH_WRAPPED_AES_SECRET_NAME=...
 | `BATCH_SQL_CONNECTION_STRING` | Sí | `jdbc:sqlserver://...` | Cadena JDBC hacia SQL Server. Debe administrarse como secreto. |
 | `BATCH_SQL_BATCH_SIZE` | No | `1000` | Tamaño de lote para leer staging por `sourceId`. |
 | `BATCH_SQL_STALE_MINUTES` | No | `15` | Minutos sin señal de vida para considerar recuperable una ejecución incompleta. |
+| `BATCH_SQL_MAX_ATTEMPTS` | No | `3` | Máximo de intentos funcionales para una misma ejecución/fecha de negocio. Al agotarse, el reproceso automático queda bloqueado. |
 | `BATCH_STORAGE_CONNECTION_STRING` | Sí | `DefaultEndpointsProtocol=...` | Cadena de conexión del Storage donde se publica el archivo. Debe administrarse como secreto. |
 | `BATCH_STORAGE_CONTAINER` | Sí | `exports` | Contenedor destino del archivo. |
 | `BATCH_KEY_VAULT_URL` | Sí | `https://kv-estruct-batch-dev.vault.azure.net/` | URL del Key Vault que contiene la RSA y el secret de AES envuelta. |

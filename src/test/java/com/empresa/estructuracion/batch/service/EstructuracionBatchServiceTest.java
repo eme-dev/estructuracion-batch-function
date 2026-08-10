@@ -50,8 +50,11 @@ class EstructuracionBatchServiceTest {
         service.execute(LOGGER);
 
         assertEquals(15, executionRepository.findRecoverableStaleMinutes);
+        assertEquals(3, executionRepository.findRecoverableMaxAttempts);
         assertEquals(LocalDate.of(2026, 7, 31), executionRepository.createdCutoff.businessDate());
+        assertEquals(3, executionRepository.createMaxAttempts);
         assertEquals(List.of("markInProgress", "markPublishing", "complete"), executionRepository.events);
+        assertEquals(List.of(false), executionRepository.retryAttempts);
         assertSame(executionRepository.createdExecution, outputService.execution);
         assertEquals(outputService.result.publicationSession(), storageService.committedSession);
         assertEquals(outputService.result.fileName(), storageService.committedBlobName);
@@ -76,6 +79,7 @@ class EstructuracionBatchServiceTest {
         assertEquals(0, executionRepository.createCount);
         assertSame(executionRepository.recoverable.orElseThrow(), outputService.execution);
         assertEquals(List.of("markInProgress", "markPublishing", "complete"), executionRepository.events);
+        assertEquals(List.of(true), executionRepository.retryAttempts);
     }
 
     @Test
@@ -84,7 +88,7 @@ class EstructuracionBatchServiceTest {
         executionRepository.recoverable = Optional.of(execution(ExecutionStatus.FAILED));
         FakeOutputService outputService = new FakeOutputService();
         EstructuracionBatchService service = new EstructuracionBatchService(
-                new BatchProperties(ZoneId.of("America/Lima"), 100, 15),
+                new BatchProperties(ZoneId.of("America/Lima"), 100, 15, 3),
                 new RepositoryDependencies(executionRepository, new UnusedStagingRepository()),
                 new ServiceDependencies(outputService, new FakeStoragePublisherService(), new FakeTelemetryService()));
 
@@ -144,7 +148,7 @@ class EstructuracionBatchServiceTest {
             StoragePublisherService storageService,
             TelemetryService telemetryService) {
         return new EstructuracionBatchService(
-                new BatchProperties(ZoneId.of("America/Lima"), 100, 15),
+                new BatchProperties(ZoneId.of("America/Lima"), 100, 15, 3),
                 new RepositoryDependencies(executionRepository, new UnusedStagingRepository()),
                 new ServiceDependencies(outputService, storageService, telemetryService),
                 Clock.fixed(Instant.parse("2026-08-01T05:10:00Z"), ZoneId.of("UTC")));
@@ -168,29 +172,41 @@ class EstructuracionBatchServiceTest {
         private BusinessDateCutoff createdCutoff;
         private int createCount;
         private int findRecoverableStaleMinutes;
+        private int findRecoverableMaxAttempts;
+        private int createMaxAttempts;
         private final List<String> events = new ArrayList<>();
+        private final List<Boolean> retryAttempts = new ArrayList<>();
         private int failCount;
         private UUID failedExecutionId;
         private String failedErrorCode;
         private String failedDetails;
 
         @Override
-        public Optional<ExecutionContext> findRecoverableExecution(int staleMinutes, LocalDateTime now) {
+        public Optional<ExecutionContext> findRecoverableExecution(
+                int staleMinutes,
+                int maxAttempts,
+                LocalDateTime now) {
             findRecoverableStaleMinutes = staleMinutes;
+            findRecoverableMaxAttempts = maxAttempts;
             return recoverable;
         }
 
         @Override
-        public ExecutionContext createExecutionWithSnapshot(BusinessDateCutoff cutoff, LocalDateTime now) {
+        public ExecutionContext createExecutionWithSnapshot(
+                BusinessDateCutoff cutoff,
+                int maxAttempts,
+                LocalDateTime now) {
             createCount++;
             createdCutoff = cutoff;
+            createMaxAttempts = maxAttempts;
             createdExecution = execution(ExecutionStatus.PREPARING);
             return createdExecution;
         }
 
         @Override
-        public void markInProgress(UUID executionId, LocalDateTime now) {
+        public void markInProgress(UUID executionId, boolean retryAttempt, LocalDateTime now) {
             events.add("markInProgress");
+            retryAttempts.add(retryAttempt);
         }
 
         @Override

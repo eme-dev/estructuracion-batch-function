@@ -42,6 +42,10 @@ Copiar `local.settings.sample.json` como `local.settings.json` y completar valor
 
 El cron del Timer Trigger se resuelve desde `BATCH_TIMER_CRON`. Para la ejecucion diaria a las 00:10 usar `0 10 0 * * *`.
 
+El Timer Trigger usa retry exponencial para fallas tecnicas transitorias. La politica configurada es 1 intento inicial + 2 reintentos automaticos.
+
+`BATCH_SQL_MAX_ATTEMPTS` controla el maximo de intentos funcionales para la misma ejecucion/fecha de negocio. El valor recomendado para esta fase es `3`, alineado con el retry del Timer. Cuando una ejecucion queda recuperable, se reutiliza el mismo `executionId`, se conserva el snapshot y se incrementa `attemptCount`; al llegar al maximo, el reproceso automatico queda bloqueado y requiere revision operativa.
+
 ## Ejecucion manual
 
 Para pruebas a demanda existe un HTTP Trigger administrativo:

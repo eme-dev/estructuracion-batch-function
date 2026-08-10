@@ -104,7 +104,7 @@ GO
 
 CREATE UNIQUE INDEX UX_EstructuracionEjecucion_ActiveBusinessDate
 ON ocrt.EstructuracionEjecucion (businessDate)
-WHERE status IN ('Preparing', 'InProgress', 'Publishing', 'Completed');
+WHERE status IN ('Preparing', 'InProgress', 'Publishing', 'Completed', 'Failed');
 GO
 
 CREATE TABLE ocrt.EstructuracionStaging

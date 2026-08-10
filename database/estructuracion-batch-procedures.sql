@@ -11,6 +11,7 @@ GO
 
 CREATE OR ALTER PROCEDURE ocrt.usp_FindRecoverableEstructuracionExecution
     @StaleMinutes INT,
+    @MaxAttempts INT,
     @Now DATETIME2(3)
 AS
 BEGIN
@@ -26,13 +27,30 @@ BEGIN
            fileName,
            fileHash
     FROM ocrt.EstructuracionEjecucion
-    WHERE status IN ('Preparing', 'InProgress', 'Publishing', 'Failed')
-      AND
-      (
-          status = 'Failed'
-          OR heartbeatAt < DATEADD(MINUTE, -@StaleMinutes, @Now)
-          OR heartbeatAt IS NULL
-      )
+    WHERE
+    (
+        status = 'Failed'
+        AND attemptCount < @MaxAttempts
+    )
+    OR
+    (
+        status IN ('Preparing', 'InProgress')
+        AND attemptCount < @MaxAttempts
+        AND
+        (
+            heartbeatAt < DATEADD(MINUTE, -@StaleMinutes, @Now)
+            OR heartbeatAt IS NULL
+        )
+    )
+    OR
+    (
+        status = 'Publishing'
+        AND
+        (
+            heartbeatAt < DATEADD(MINUTE, -@StaleMinutes, @Now)
+            OR heartbeatAt IS NULL
+        )
+    )
     ORDER BY startedAt;
 END;
 GO
@@ -42,7 +60,8 @@ CREATE OR ALTER PROCEDURE ocrt.usp_CreateEstructuracionExecutionSnapshot
     @BusinessDate DATE,
     @CutoffFromUtc DATETIME2(3),
     @CutoffToUtc DATETIME2(3),
-    @Now DATETIME2(3)
+    @Now DATETIME2(3),
+    @MaxAttempts INT
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -67,6 +86,26 @@ BEGIN
 
     IF @LockResult < 0
         THROW 51001, 'No se pudo obtener lock aplicativo para businessDate.', 1;
+
+    IF EXISTS
+    (
+        SELECT 1
+        FROM ocrt.EstructuracionEjecucion
+        WHERE businessDate = @BusinessDate
+          AND status = 'Failed'
+          AND attemptCount >= @MaxAttempts
+    )
+        THROW 51006, 'La ejecucion ya agoto el numero maximo de intentos.', 1;
+
+    IF EXISTS
+    (
+        SELECT 1
+        FROM ocrt.EstructuracionEjecucion
+        WHERE businessDate = @BusinessDate
+          AND status = 'Failed'
+          AND attemptCount < @MaxAttempts
+    )
+        THROW 51007, 'Existe una ejecucion fallida recuperable para la fecha de negocio.', 1;
 
     TRUNCATE TABLE ocrt.EstructuracionStaging;
 
@@ -153,6 +192,7 @@ GO
 
 CREATE OR ALTER PROCEDURE ocrt.usp_MarkEstructuracionInProgress
     @ExecutionId UNIQUEIDENTIFIER,
+    @RetryAttempt BIT,
     @Now DATETIME2(3)
 AS
 BEGIN
@@ -162,6 +202,7 @@ BEGIN
        SET status = 'InProgress',
            finishedAt = NULL,
            heartbeatAt = @Now,
+           attemptCount = attemptCount + CASE WHEN @RetryAttempt = 1 THEN 1 ELSE 0 END,
            errorMessage = NULL
      WHERE executionId = @ExecutionId
        AND status IN ('Preparing', 'InProgress', 'Failed');

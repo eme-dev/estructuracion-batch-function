@@ -8,6 +8,7 @@ import com.microsoft.azure.functions.HttpRequestMessage;
 import com.microsoft.azure.functions.HttpResponseMessage;
 import com.microsoft.azure.functions.HttpStatus;
 import com.microsoft.azure.functions.annotation.AuthorizationLevel;
+import com.microsoft.azure.functions.annotation.ExponentialBackoffRetry;
 import com.microsoft.azure.functions.annotation.FunctionName;
 import com.microsoft.azure.functions.annotation.HttpTrigger;
 import com.microsoft.azure.functions.annotation.TimerTrigger;
@@ -15,6 +16,10 @@ import com.microsoft.azure.functions.annotation.TimerTrigger;
 import java.util.Optional;
 
 public class EstructuracionBatchFunction {
+    private static final int SCHEDULED_MAX_RETRY_COUNT = 2;
+    private static final String SCHEDULED_MIN_RETRY_INTERVAL = "00:00:30";
+    private static final String SCHEDULED_MAX_RETRY_INTERVAL = "00:10:00";
+
     private final EstructuracionBatchService batchService;
 
     public EstructuracionBatchFunction() {
@@ -27,6 +32,10 @@ public class EstructuracionBatchFunction {
     }
 
     @FunctionName("EstructuracionBatch")
+    @ExponentialBackoffRetry(
+            maxRetryCount = SCHEDULED_MAX_RETRY_COUNT,
+            minimumInterval = SCHEDULED_MIN_RETRY_INTERVAL,
+            maximumInterval = SCHEDULED_MAX_RETRY_INTERVAL)
     public void run(
             @TimerTrigger(name = "timer", schedule = "%BATCH_TIMER_CRON%") String timerInfo,
             ExecutionContext context) {

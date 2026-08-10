@@ -42,16 +42,17 @@ class SqlExecutionRepositoryTest {
         CallableStatement statement = mock(CallableStatement.class);
         ResultSet rs = executionResultSet(executionId, "Failed");
         when(connectionProvider.getConnection()).thenReturn(connection);
-        when(connection.prepareCall("{call ocrt.usp_FindRecoverableEstructuracionExecution(?, ?)}")).thenReturn(statement);
+        when(connection.prepareCall("{call ocrt.usp_FindRecoverableEstructuracionExecution(?, ?, ?)}")).thenReturn(statement);
         when(statement.executeQuery()).thenReturn(rs);
 
-        Optional<ExecutionContext> context = repository.findRecoverableExecution(60, now);
+        Optional<ExecutionContext> context = repository.findRecoverableExecution(60, 3, now);
 
         assertTrue(context.isPresent());
         assertEquals(executionId, context.orElseThrow().executionId());
         assertEquals(ExecutionStatus.FAILED, context.orElseThrow().status());
         verify(statement).setInt(1, 60);
-        verify(statement).setTimestamp(2, Timestamp.valueOf(now));
+        verify(statement).setInt(2, 3);
+        verify(statement).setTimestamp(3, Timestamp.valueOf(now));
     }
 
     @Test
@@ -60,11 +61,11 @@ class SqlExecutionRepositoryTest {
         CallableStatement statement = mock(CallableStatement.class);
         ResultSet rs = mock(ResultSet.class);
         when(connectionProvider.getConnection()).thenReturn(connection);
-        when(connection.prepareCall("{call ocrt.usp_FindRecoverableEstructuracionExecution(?, ?)}")).thenReturn(statement);
+        when(connection.prepareCall("{call ocrt.usp_FindRecoverableEstructuracionExecution(?, ?, ?)}")).thenReturn(statement);
         when(statement.executeQuery()).thenReturn(rs);
         when(rs.next()).thenReturn(false);
 
-        assertTrue(repository.findRecoverableExecution(60, LocalDateTime.of(2026, 7, 18, 0, 10)).isEmpty());
+        assertTrue(repository.findRecoverableExecution(60, 3, LocalDateTime.of(2026, 7, 18, 0, 10)).isEmpty());
     }
 
     @Test
@@ -76,10 +77,10 @@ class SqlExecutionRepositoryTest {
         CallableStatement statement = mock(CallableStatement.class);
         ResultSet rs = executionResultSet(executionId, "Preparing");
         when(connectionProvider.getConnection()).thenReturn(connection);
-        when(connection.prepareCall("{call ocrt.usp_CreateEstructuracionExecutionSnapshot(?, ?, ?, ?, ?)}")).thenReturn(statement);
+        when(connection.prepareCall("{call ocrt.usp_CreateEstructuracionExecutionSnapshot(?, ?, ?, ?, ?, ?)}")).thenReturn(statement);
         when(statement.executeQuery()).thenReturn(rs);
 
-        ExecutionContext context = repository.createExecutionWithSnapshot(cutoff, now);
+        ExecutionContext context = repository.createExecutionWithSnapshot(cutoff, 3, now);
 
         assertEquals(executionId, context.executionId());
         assertEquals(ExecutionStatus.PREPARING, context.status());
@@ -88,6 +89,7 @@ class SqlExecutionRepositoryTest {
         verify(statement).setTimestamp(3, Timestamp.from(cutoff.cutoffFromUtc()));
         verify(statement).setTimestamp(4, Timestamp.from(cutoff.cutoffToUtc()));
         verify(statement).setTimestamp(5, Timestamp.valueOf(now));
+        verify(statement).setInt(6, 3);
     }
 
     @Test
@@ -96,12 +98,12 @@ class SqlExecutionRepositoryTest {
         CallableStatement statement = mock(CallableStatement.class);
         ResultSet rs = mock(ResultSet.class);
         when(connectionProvider.getConnection()).thenReturn(connection);
-        when(connection.prepareCall("{call ocrt.usp_CreateEstructuracionExecutionSnapshot(?, ?, ?, ?, ?)}")).thenReturn(statement);
+        when(connection.prepareCall("{call ocrt.usp_CreateEstructuracionExecutionSnapshot(?, ?, ?, ?, ?, ?)}")).thenReturn(statement);
         when(statement.executeQuery()).thenReturn(rs);
         when(rs.next()).thenReturn(false);
         BusinessDateCutoff cutoff = businessDateCutoff();
 
-        assertThrowsRepositoryException(() -> repository.createExecutionWithSnapshot(cutoff, LocalDateTime.now()));
+        assertThrowsRepositoryException(() -> repository.createExecutionWithSnapshot(cutoff, 3, LocalDateTime.now()));
     }
 
     @Test
@@ -111,12 +113,13 @@ class SqlExecutionRepositoryTest {
         Connection connection = mock(Connection.class);
         CallableStatement statement = mock(CallableStatement.class);
         when(connectionProvider.getConnection()).thenReturn(connection);
-        when(connection.prepareCall("{call ocrt.usp_MarkEstructuracionInProgress(?, ?)}")).thenReturn(statement);
+        when(connection.prepareCall("{call ocrt.usp_MarkEstructuracionInProgress(?, ?, ?)}")).thenReturn(statement);
 
-        repository.markInProgress(executionId, now);
+        repository.markInProgress(executionId, true, now);
 
         verify(statement).setObject(1, executionId);
-        verify(statement).setTimestamp(2, Timestamp.valueOf(now));
+        verify(statement).setBoolean(2, true);
+        verify(statement).setTimestamp(3, Timestamp.valueOf(now));
         verify(statement).execute();
     }
 

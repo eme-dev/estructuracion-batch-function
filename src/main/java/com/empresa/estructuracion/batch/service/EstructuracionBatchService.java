@@ -57,7 +57,11 @@ public class EstructuracionBatchService {
                     clock,
                     properties.zoneId());
             Optional<ExecutionContext> recoverable =
-                    executionRepository.findRecoverableExecution(properties.staleMinutes(), now());
+                    executionRepository.findRecoverableExecution(
+                            properties.staleMinutes(),
+                            properties.maxAttempts(),
+                            now());
+            boolean retryAttempt = recoverable.isPresent();
             if (recoverable.isPresent()) {
                 execution = recoverable.get();
                 if (execution.status() == ExecutionStatus.PUBLISHING) {
@@ -66,10 +70,10 @@ public class EstructuracionBatchService {
                 }
                 logger.info("Recoverable execution found. Reusing executionId=" + execution.executionId());
             } else {
-                execution = executionRepository.createExecutionWithSnapshot(cutoff, now());
+                execution = executionRepository.createExecutionWithSnapshot(cutoff, properties.maxAttempts(), now());
             }
 
-            executionRepository.markInProgress(execution.executionId(), now());
+            executionRepository.markInProgress(execution.executionId(), retryAttempt, now());
             telemetryService.trackBatchStarted(logger, execution);
 
             BatchResult result = outputService.generate(execution);

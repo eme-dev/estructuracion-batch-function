@@ -1,5 +1,6 @@
 package com.empresa.estructuracion.batch.service.impl;
 
+import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.BlobServiceClientBuilder;
 import com.azure.storage.blob.specialized.BlockBlobClient;
@@ -17,7 +18,8 @@ public class BlobStorageService implements StoragePublisherService {
 
     public BlobStorageService(StorageConfig storageConfig) {
         this(new BlobServiceClientBuilder()
-                .connectionString(storageConfig.connectionString())
+                .endpoint(storageConfig.endpoint())
+                .credential(new DefaultAzureCredentialBuilder().build())
                 .buildClient()
                 .getBlobContainerClient(storageConfig.containerName()));
     }

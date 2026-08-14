@@ -93,7 +93,7 @@ public class DependencyConfig {
 
     private static StorageConfig storageConfig() {
         return new StorageConfig(
-                required("BATCH_STORAGE_CONNECTION_STRING"),
+                required("BATCH_STORAGE_ENDPOINT"),
                 required("BATCH_STORAGE_CONTAINER"));
     }
 

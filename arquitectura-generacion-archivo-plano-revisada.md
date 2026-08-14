@@ -1296,9 +1296,11 @@ estructuracion_YYYYMMDD_{executionId}.csv
 Variables asociadas:
 
 ```text
-BATCH_STORAGE_CONNECTION_STRING
+BATCH_STORAGE_ENDPOINT=https://{storage-account}.blob.core.windows.net
 BATCH_STORAGE_CONTAINER=exports
 ```
+
+La autenticación hacia Blob Storage se realiza con `DefaultAzureCredential`. En Azure debe usarse Managed Identity con permisos mínimos de datos sobre el contenedor o Storage Account. En local se puede autenticar con `az login`.
 
 ### 11.3 Azure Key Vault
 
@@ -1418,7 +1420,7 @@ BATCH_SQL_CONNECTION_STRING=...
 BATCH_SQL_BATCH_SIZE=1000
 BATCH_SQL_STALE_MINUTES=15
 BATCH_SQL_MAX_ATTEMPTS=3
-BATCH_STORAGE_CONNECTION_STRING=...
+BATCH_STORAGE_ENDPOINT=https://{storage-account}.blob.core.windows.net
 BATCH_STORAGE_CONTAINER=exports
 BATCH_KEY_VAULT_URL=...
 BATCH_RSA_KEY_NAME=...
@@ -1437,7 +1439,7 @@ BATCH_WRAPPED_AES_SECRET_NAME=...
 | `BATCH_SQL_BATCH_SIZE` | No | `1000` | Tamaño de lote para leer staging por `sourceId`. |
 | `BATCH_SQL_STALE_MINUTES` | No | `15` | Minutos sin señal de vida para considerar recuperable una ejecución incompleta. |
 | `BATCH_SQL_MAX_ATTEMPTS` | No | `3` | Máximo de intentos funcionales para una misma ejecución/fecha de negocio. Al agotarse, el reproceso automático queda bloqueado. |
-| `BATCH_STORAGE_CONNECTION_STRING` | Sí | `DefaultEndpointsProtocol=...` | Cadena de conexión del Storage donde se publica el archivo. Debe administrarse como secreto. |
+| `BATCH_STORAGE_ENDPOINT` | Sí | `https://{storage-account}.blob.core.windows.net` | Endpoint del Blob Storage destino. La autenticación usa `DefaultAzureCredential`, no connection string. |
 | `BATCH_STORAGE_CONTAINER` | Sí | `exports` | Contenedor destino del archivo. |
 | `BATCH_KEY_VAULT_URL` | Sí | `https://kv-estruct-batch-dev.vault.azure.net/` | URL del Key Vault que contiene la RSA y el secret de AES envuelta. |
 | `BATCH_RSA_KEY_NAME` | Sí | `rsa-estruct-batch-key` | Nombre de la clave RSA usada para desenvolver la AES. |

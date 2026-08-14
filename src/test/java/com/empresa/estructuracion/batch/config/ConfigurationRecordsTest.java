@@ -22,9 +22,9 @@ class ConfigurationRecordsTest {
 
     @Test
     void storageConfigShouldExposeStorageSettings() {
-        StorageConfig storageConfig = new StorageConfig("UseDevelopmentStorage=true", "output");
+        StorageConfig storageConfig = new StorageConfig("https://storage.blob.core.windows.net", "output");
 
-        assertEquals("UseDevelopmentStorage=true", storageConfig.connectionString());
+        assertEquals("https://storage.blob.core.windows.net", storageConfig.endpoint());
         assertEquals("output", storageConfig.containerName());
     }
 

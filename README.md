@@ -46,6 +46,8 @@ El Timer Trigger usa retry exponencial para fallas tecnicas transitorias. La pol
 
 `BATCH_SQL_MAX_ATTEMPTS` controla el maximo de intentos funcionales para la misma ejecucion/fecha de negocio. El valor recomendado para esta fase es `3`, alineado con el retry del Timer. Cuando una ejecucion queda recuperable, se reutiliza el mismo `executionId`, se conserva el snapshot y se incrementa `attemptCount`; al llegar al maximo, el reproceso automatico queda bloqueado y requiere revision operativa.
 
+Blob Storage se autentica con `DefaultAzureCredential` usando `BATCH_STORAGE_ENDPOINT`. En Azure usar Managed Identity con rol `Storage Blob Data Contributor`; en local se puede probar con `az login`.
+
 ## Ejecucion manual
 
 Para pruebas a demanda existe un HTTP Trigger administrativo:

@@ -9,7 +9,7 @@
     "BATCH_SQL_STALE_MINUTES": "15",
     "BATCH_SQL_MAX_ATTEMPTS": "3",
     "BATCH_SQL_BATCH_SIZE": "1000",
-    "BATCH_STORAGE_CONNECTION_STRING": "DefaultEndpointsProtocol=https;AccountName=...;AccountKey=...;EndpointSuffix=core.windows.net",
+    "BATCH_STORAGE_ENDPOINT": "https://storage-account.blob.core.windows.net",
     "BATCH_STORAGE_CONTAINER": "exports",
     "BATCH_KEY_VAULT_URL": "https://kv-estruct-batch-dev.vault.azure.net/",
     "BATCH_RSA_KEY_NAME": "rsa-estruct-batch-key",

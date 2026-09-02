@@ -9,6 +9,7 @@ import com.empresa.estructuracion.batch.model.BatchResult;
 import com.empresa.estructuracion.batch.model.BusinessDateCutoff;
 import com.empresa.estructuracion.batch.model.ExecutionContext;
 import com.empresa.estructuracion.batch.model.ExecutionStatus;
+import com.empresa.estructuracion.batch.model.ReprocessDateRequest;
 import com.empresa.estructuracion.batch.repository.ExecutionRepository;
 import com.empresa.estructuracion.batch.util.BusinessDateCalculator;
 
@@ -56,11 +57,13 @@ public class EstructuracionBatchService {
             BusinessDateCutoff cutoff = BusinessDateCalculator.previousBusinessDate(
                     clock,
                     properties.zoneId());
+            long recoverableStartedAt = System.nanoTime();
             Optional<ExecutionContext> recoverable =
                     executionRepository.findRecoverableExecution(
                             properties.staleMinutes(),
                             properties.maxAttempts(),
                             now());
+            logPerformance(logger, null, "findRecoverableExecution", recoverableStartedAt);
             boolean retryAttempt = recoverable.isPresent();
             if (recoverable.isPresent()) {
                 execution = recoverable.get();
@@ -70,22 +73,77 @@ public class EstructuracionBatchService {
                 }
                 logger.info("Recoverable execution found. Reusing executionId=" + execution.executionId());
             } else {
+                long snapshotStartedAt = System.nanoTime();
                 execution = executionRepository.createExecutionWithSnapshot(cutoff, properties.maxAttempts(), now());
+                logPerformance(logger, execution.executionId(), "createDailySnapshot", snapshotStartedAt);
             }
 
-            executionRepository.markInProgress(execution.executionId(), retryAttempt, now());
-            telemetryService.trackBatchStarted(logger, execution);
-
-            BatchResult result = outputService.generate(execution);
-
-            executionRepository.markPublishing(execution.executionId(), now());
-            blobStorageService.commitBlocks(result.publicationSession(), result.fileName());
-
-            executionRepository.complete(result, now());
-            telemetryService.trackBatchCompleted(logger, result);
+            processExecution(logger, execution, retryAttempt);
         } catch (RuntimeException ex) {
             handleFailure(logger, execution == null ? null : execution.executionId(), ex);
             throw ex;
+        }
+    }
+
+    public BatchResult executeDateReprocess(ReprocessDateRequest request, Logger logger) {
+        validateReprocessDateRequest(request);
+        ExecutionContext execution = null;
+        try {
+            BusinessDateCutoff cutoff = BusinessDateCalculator.forBusinessDate(
+                    request.businessDate(),
+                    properties.zoneId());
+            long snapshotStartedAt = System.nanoTime();
+            execution = executionRepository.createDateReprocessExecutionWithSnapshot(
+                    cutoff,
+                    properties.maxAttempts(),
+                    request.requestedBy().trim(),
+                    request.reason().trim(),
+                    now());
+            logPerformance(logger, execution.executionId(), "createDateReprocessSnapshot", snapshotStartedAt);
+            return processExecution(logger, execution, false);
+        } catch (RuntimeException ex) {
+            handleFailure(logger, execution == null ? null : execution.executionId(), ex);
+            throw ex;
+        }
+    }
+
+    private BatchResult processExecution(Logger logger, ExecutionContext execution, boolean retryAttempt) {
+        long markInProgressStartedAt = System.nanoTime();
+        executionRepository.markInProgress(execution.executionId(), retryAttempt, now());
+        logPerformance(logger, execution.executionId(), "markInProgress", markInProgressStartedAt);
+        telemetryService.trackBatchStarted(logger, execution);
+
+        long generateStartedAt = System.nanoTime();
+        BatchResult result = outputService.generate(execution);
+        logPerformance(logger, execution.executionId(), "generateOutput", generateStartedAt);
+
+        long markPublishingStartedAt = System.nanoTime();
+        executionRepository.markPublishing(execution.executionId(), now());
+        logPerformance(logger, execution.executionId(), "markPublishing", markPublishingStartedAt);
+
+        long commitStartedAt = System.nanoTime();
+        blobStorageService.commitBlocks(result.publicationSession(), result.fileName());
+        logPerformance(logger, execution.executionId(), "commitBlocks", commitStartedAt);
+
+        long completeStartedAt = System.nanoTime();
+        executionRepository.complete(result, now());
+        logPerformance(logger, execution.executionId(), "completeExecution", completeStartedAt);
+        telemetryService.trackBatchCompleted(logger, result);
+        return result;
+    }
+
+    private void validateReprocessDateRequest(ReprocessDateRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("Request body is required.");
+        }
+        if (request.businessDate() == null) {
+            throw new IllegalArgumentException("businessDate is required.");
+        }
+        if (request.requestedBy() == null || request.requestedBy().isBlank()) {
+            throw new IllegalArgumentException("requestedBy is required.");
+        }
+        if (request.reason() == null || request.reason().isBlank()) {
+            throw new IllegalArgumentException("reason is required.");
         }
     }
 
@@ -112,5 +170,14 @@ public class EstructuracionBatchService {
 
     private LocalDateTime now() {
         return LocalDateTime.now(properties.zoneId());
+    }
+
+    private static void logPerformance(Logger logger, UUID executionId, String phase, long startedAt) {
+        logger.info("Batch performance. executionId=%s phase=%s elapsedMs=%d"
+                .formatted(executionId, phase, elapsedMillis(startedAt)));
+    }
+
+    private static long elapsedMillis(long startedAt) {
+        return (System.nanoTime() - startedAt) / 1_000_000;
     }
 }

@@ -249,6 +249,8 @@ Notas:
 CREATE TABLE ocrt.EstructuracionEjecucion
 (
     executionId       UNIQUEIDENTIFIER NOT NULL,
+    executionType     VARCHAR(30) NOT NULL
+        CONSTRAINT DF_EstructuracionEjecucion_ExecutionType DEFAULT ('DAILY_CUTOFF'),
     businessDate      DATE NOT NULL,
     cutoffFromUtc     DATETIME2(3) NOT NULL,
     cutoffToUtc       DATETIME2(3) NOT NULL,
@@ -270,6 +272,9 @@ CREATE TABLE ocrt.EstructuracionEjecucion
     fileHash          BINARY(32) NULL,
     recordCount       BIGINT NULL,
     contentLength     BIGINT NULL,
+    reprocessReason   NVARCHAR(500) NULL,
+    requestedBy       NVARCHAR(150) NULL,
+    requestedAt       DATETIME2(3) NULL,
     errorMessage      NVARCHAR(MAX) NULL,
 
     CONSTRAINT PK_EstructuracionEjecucion
@@ -288,6 +293,16 @@ CREATE TABLE ocrt.EstructuracionEjecucion
             )
         ),
 
+    CONSTRAINT CK_EstructuracionEjecucion_ExecutionType
+        CHECK
+        (
+            executionType IN
+            (
+                'DAILY_CUTOFF',
+                'REPROCESS_DATE'
+            )
+        ),
+
     CONSTRAINT CK_EstructuracionEjecucion_Cutoff
         CHECK (cutoffFromUtc < cutoffToUtc)
 );
@@ -303,9 +318,12 @@ GO
 
 CREATE UNIQUE INDEX UX_EstructuracionEjecucion_ActiveBusinessDate
 ON ocrt.EstructuracionEjecucion (businessDate)
-WHERE status IN ('Preparing', 'InProgress', 'Publishing', 'Completed', 'Failed');
+WHERE executionType = 'DAILY_CUTOFF'
+  AND status IN ('Preparing', 'InProgress', 'Publishing', 'Completed', 'Failed');
 GO
 ```
+
+`executionType = 'DAILY_CUTOFF'` representa la ejecucion normal del Timer Trigger. El indice unico protege que el cierre diario no se duplique para la misma fecha de negocio. El reproceso manual por fecha usa `REPROCESS_DATE` para no competir con la restriccion del cierre diario.
 
 > Si la versión o política de SQL Server no admite el filtro anterior, utilizar `sp_getapplock` y una validación transaccional equivalente.
 
@@ -952,6 +970,32 @@ Reglas:
 - La ejecución manual debe respetar la misma regla de `businessDate` del día anterior.
 - La ejecución manual debe validar primero que no exista una ejecución recuperable.
 - El endpoint no debe recibir datos sensibles en el body.
+
+### 10.1.2 Reproceso manual por fecha
+
+Para reprocesar una fecha especifica se habilita un HTTP Trigger separado del endpoint manual tecnico del cierre diario.
+
+```text
+POST /api/estructuracion/batch/reprocess/date
+```
+
+Request:
+
+```json
+{
+  "businessDate": "2026-08-23",
+  "requestedBy": "soporte01",
+  "reason": "Reproceso solicitado por negocio"
+}
+```
+
+Reglas:
+
+- La ejecucion se registra con `executionType = 'REPROCESS_DATE'`.
+- El indice unico por `businessDate` aplica solo a `DAILY_CUTOFF`, por lo que el reproceso no compite con el cierre diario ya completado.
+- Antes de reconstruir staging, SQL valida que no exista una ejecucion activa en `Preparing`, `InProgress` o `Publishing`.
+- El reproceso genera un CSV independiente porque el nombre del archivo incluye `executionId`.
+- `requestedBy`, `requestedAt` y `reprocessReason` quedan registrados en `ocrt.EstructuracionEjecucion`.
 
 ### 10.2 Diagrama de clases para implementación
 

@@ -64,6 +64,36 @@ public class SqlExecutionRepository implements ExecutionRepository {
     }
 
     @Override
+    public ExecutionContext createDateReprocessExecutionWithSnapshot(
+            BusinessDateCutoff cutoff,
+            int maxAttempts,
+            String requestedBy,
+            String reason,
+            LocalDateTime now) {
+        String sql = "{call ocrt.usp_CreateEstructuracionDateReprocessSnapshot(?, ?, ?, ?, ?, ?, ?, ?)}";
+        UUID executionId = UUID.randomUUID();
+        try (Connection connection = connectionProvider.getConnection();
+             CallableStatement statement = connection.prepareCall(sql)) {
+            statement.setObject(1, executionId);
+            statement.setDate(2, java.sql.Date.valueOf(cutoff.businessDate()));
+            statement.setTimestamp(3, Timestamp.from(cutoff.cutoffFromUtc()));
+            statement.setTimestamp(4, Timestamp.from(cutoff.cutoffToUtc()));
+            statement.setTimestamp(5, timestamp(now));
+            statement.setInt(6, maxAttempts);
+            statement.setString(7, requestedBy);
+            statement.setString(8, reason);
+            try (ResultSet rs = statement.executeQuery()) {
+                if (!rs.next()) {
+                    throw new RepositoryException("Date reprocess procedure did not return execution context.", null);
+                }
+                return rowMapper.map(rs);
+            }
+        } catch (Exception ex) {
+            throw new RepositoryException("Unable to create date reprocess snapshot.", ex);
+        }
+    }
+
+    @Override
     public void markInProgress(UUID executionId, boolean retryAttempt, LocalDateTime now) {
         String sql = "{call ocrt.usp_MarkEstructuracionInProgress(?, ?, ?)}";
         try (Connection connection = connectionProvider.getConnection();

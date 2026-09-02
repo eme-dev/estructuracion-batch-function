@@ -198,6 +198,16 @@ class StagedOutputServiceTest {
         }
 
         @Override
+        public ExecutionContext createDateReprocessExecutionWithSnapshot(
+                BusinessDateCutoff cutoff,
+                int maxAttempts,
+                String requestedBy,
+                String reason,
+                LocalDateTime now) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
         public void markInProgress(UUID executionId, boolean retryAttempt, LocalDateTime now) {
             throw new UnsupportedOperationException();
         }

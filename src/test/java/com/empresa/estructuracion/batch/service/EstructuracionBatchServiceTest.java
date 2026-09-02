@@ -10,6 +10,7 @@ import com.empresa.estructuracion.batch.model.BusinessDateCutoff;
 import com.empresa.estructuracion.batch.model.ExecutionContext;
 import com.empresa.estructuracion.batch.model.ExecutionStatus;
 import com.empresa.estructuracion.batch.model.PublicationSession;
+import com.empresa.estructuracion.batch.model.ReprocessDateRequest;
 import com.empresa.estructuracion.batch.repository.ExecutionRepository;
 import com.empresa.estructuracion.batch.repository.StagingRepository;
 import org.junit.jupiter.api.Test;
@@ -142,6 +143,52 @@ class EstructuracionBatchServiceTest {
         assertTrue(telemetryService.failed.get(0).failureDetails().contains("boom"));
     }
 
+    @Test
+    void executeDateReprocessShouldCreateIndependentSnapshotAndPublishOutput() {
+        FakeExecutionRepository executionRepository = new FakeExecutionRepository();
+        FakeOutputService outputService = new FakeOutputService();
+        FakeStoragePublisherService storageService = new FakeStoragePublisherService();
+        FakeTelemetryService telemetryService = new FakeTelemetryService();
+        EstructuracionBatchService service = service(
+                executionRepository,
+                outputService,
+                storageService,
+                telemetryService);
+
+        BatchResult result = service.executeDateReprocess(
+                new ReprocessDateRequest(
+                        LocalDate.of(2026, 7, 30),
+                        " soporte01 ",
+                        " Correccion de corte "),
+                LOGGER);
+
+        assertSame(outputService.result, result);
+        assertEquals(LocalDate.of(2026, 7, 30), executionRepository.reprocessCutoff.businessDate());
+        assertEquals(3, executionRepository.reprocessMaxAttempts);
+        assertEquals("soporte01", executionRepository.reprocessRequestedBy);
+        assertEquals("Correccion de corte", executionRepository.reprocessReason);
+        assertEquals(List.of("markInProgress", "markPublishing", "complete"), executionRepository.events);
+        assertEquals(List.of(false), executionRepository.retryAttempts);
+        assertSame(executionRepository.createdExecution, outputService.execution);
+        assertEquals(outputService.result.publicationSession(), storageService.committedSession);
+        assertEquals(1, telemetryService.completedCount);
+    }
+
+    @Test
+    void executeDateReprocessShouldRejectMissingBusinessDate() {
+        EstructuracionBatchService service = service(
+                new FakeExecutionRepository(),
+                new FakeOutputService(),
+                new FakeStoragePublisherService(),
+                new FakeTelemetryService());
+
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.executeDateReprocess(new ReprocessDateRequest(null, "soporte01", "motivo"), LOGGER));
+
+        assertEquals("businessDate is required.", ex.getMessage());
+    }
+
     private EstructuracionBatchService service(
             FakeExecutionRepository executionRepository,
             OutputService outputService,
@@ -170,10 +217,14 @@ class EstructuracionBatchServiceTest {
         private Optional<ExecutionContext> recoverable = Optional.empty();
         private ExecutionContext createdExecution;
         private BusinessDateCutoff createdCutoff;
+        private BusinessDateCutoff reprocessCutoff;
         private int createCount;
         private int findRecoverableStaleMinutes;
         private int findRecoverableMaxAttempts;
         private int createMaxAttempts;
+        private int reprocessMaxAttempts;
+        private String reprocessRequestedBy;
+        private String reprocessReason;
         private final List<String> events = new ArrayList<>();
         private final List<Boolean> retryAttempts = new ArrayList<>();
         private int failCount;
@@ -199,6 +250,21 @@ class EstructuracionBatchServiceTest {
             createCount++;
             createdCutoff = cutoff;
             createMaxAttempts = maxAttempts;
+            createdExecution = execution(ExecutionStatus.PREPARING);
+            return createdExecution;
+        }
+
+        @Override
+        public ExecutionContext createDateReprocessExecutionWithSnapshot(
+                BusinessDateCutoff cutoff,
+                int maxAttempts,
+                String requestedBy,
+                String reason,
+                LocalDateTime now) {
+            reprocessCutoff = cutoff;
+            reprocessMaxAttempts = maxAttempts;
+            reprocessRequestedBy = requestedBy;
+            reprocessReason = reason;
             createdExecution = execution(ExecutionStatus.PREPARING);
             return createdExecution;
         }

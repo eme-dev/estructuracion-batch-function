@@ -48,6 +48,45 @@ El Timer Trigger usa retry exponencial para fallas tecnicas transitorias. La pol
 
 Blob Storage se autentica con `DefaultAzureCredential` usando `BATCH_STORAGE_ENDPOINT`. En Azure usar Managed Identity con rol `Storage Blob Data Contributor`; en local se puede probar con `az login`.
 
+## Medicion de rendimiento
+
+El batch registra tiempos por fase con el prefijo `Batch performance`.
+
+Fases del orquestador:
+
+```text
+findRecoverableExecution
+createDailySnapshot
+createDateReprocessSnapshot
+markInProgress
+generateOutput
+markPublishing
+commitBlocks
+completeExecution
+```
+
+Durante `generateOutput`, cada bloque registra:
+
+```text
+readMs
+resolveDataMapMs
+writeCsvMs
+stageBlobMs
+heartbeatMs
+records
+blockBytes
+firstSourceId
+lastSourceId
+```
+
+El resumen final registra los acumulados:
+
+```text
+Batch performance summary. executionId=... records=... bytes=... blocks=... readMs=... resolveDataMapMs=... writeCsvMs=... stageBlobMs=... heartbeatMs=... totalMs=...
+```
+
+Estos valores permiten identificar si la mayor demora esta en SQL, desencriptado/validacion, generacion CSV o publicacion en Blob Storage.
+
 ## Ejecucion manual
 
 Para pruebas a demanda existe un HTTP Trigger administrativo:
@@ -57,6 +96,24 @@ POST /api/estructuracion/batch/run
 ```
 
 El endpoint usa authorization level `FUNCTION`, por lo que requiere function key cuando se ejecuta fuera del host local.
+
+Para reprocesar una fecha de negocio especifica existe un HTTP Trigger separado:
+
+```text
+POST /api/estructuracion/batch/reprocess/date
+```
+
+Body para Postman:
+
+```json
+{
+  "businessDate": "2026-08-23",
+  "requestedBy": "soporte01",
+  "reason": "Reproceso solicitado por negocio"
+}
+```
+
+Este endpoint crea una ejecucion `REPROCESS_DATE`, reconstruye el snapshot para la fecha indicada y genera un CSV independiente. Si existe una ejecucion activa en `Preparing`, `InProgress` o `Publishing`, SQL bloquea la creacion del nuevo snapshot para proteger la tabla staging compartida.
 
 ## Nota de runtime
 

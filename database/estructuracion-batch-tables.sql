@@ -50,6 +50,8 @@ GO
 CREATE TABLE ocrt.EstructuracionEjecucion
 (
     executionId       UNIQUEIDENTIFIER NOT NULL,
+    executionType     VARCHAR(30) NOT NULL
+        CONSTRAINT DF_EstructuracionEjecucion_ExecutionType DEFAULT ('DAILY_CUTOFF'),
     businessDate      DATE NOT NULL,
     cutoffFromUtc     DATETIME2(3) NOT NULL,
     cutoffToUtc       DATETIME2(3) NOT NULL,
@@ -71,6 +73,9 @@ CREATE TABLE ocrt.EstructuracionEjecucion
     fileHash          BINARY(32) NULL,
     recordCount       BIGINT NULL,
     contentLength     BIGINT NULL,
+    reprocessReason   NVARCHAR(500) NULL,
+    requestedBy       NVARCHAR(150) NULL,
+    requestedAt       DATETIME2(3) NULL,
     errorMessage      NVARCHAR(MAX) NULL,
 
     CONSTRAINT PK_EstructuracionEjecucion
@@ -89,6 +94,16 @@ CREATE TABLE ocrt.EstructuracionEjecucion
             )
         ),
 
+    CONSTRAINT CK_EstructuracionEjecucion_ExecutionType
+        CHECK
+        (
+            executionType IN
+            (
+                'DAILY_CUTOFF',
+                'REPROCESS_DATE'
+            )
+        ),
+
     CONSTRAINT CK_EstructuracionEjecucion_Cutoff
         CHECK (cutoffFromUtc < cutoffToUtc)
 );
@@ -104,7 +119,8 @@ GO
 
 CREATE UNIQUE INDEX UX_EstructuracionEjecucion_ActiveBusinessDate
 ON ocrt.EstructuracionEjecucion (businessDate)
-WHERE status IN ('Preparing', 'InProgress', 'Publishing', 'Completed', 'Failed');
+WHERE executionType = 'DAILY_CUTOFF'
+  AND status IN ('Preparing', 'InProgress', 'Publishing', 'Completed', 'Failed');
 GO
 
 CREATE TABLE ocrt.EstructuracionStaging

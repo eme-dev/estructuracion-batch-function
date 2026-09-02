@@ -93,6 +93,38 @@ class SqlExecutionRepositoryTest {
     }
 
     @Test
+    void createDateReprocessExecutionWithSnapshotShouldCallProcedureAndReturnContext() throws Exception {
+        BusinessDateCutoff cutoff = businessDateCutoff();
+        LocalDateTime now = LocalDateTime.of(2026, 7, 18, 0, 10);
+        UUID executionId = UUID.randomUUID();
+        Connection connection = mock(Connection.class);
+        CallableStatement statement = mock(CallableStatement.class);
+        ResultSet rs = executionResultSet(executionId, "Preparing");
+        when(connectionProvider.getConnection()).thenReturn(connection);
+        when(connection.prepareCall("{call ocrt.usp_CreateEstructuracionDateReprocessSnapshot(?, ?, ?, ?, ?, ?, ?, ?)}"))
+                .thenReturn(statement);
+        when(statement.executeQuery()).thenReturn(rs);
+
+        ExecutionContext context = repository.createDateReprocessExecutionWithSnapshot(
+                cutoff,
+                3,
+                "soporte01",
+                "Correccion del corte",
+                now);
+
+        assertEquals(executionId, context.executionId());
+        assertEquals(ExecutionStatus.PREPARING, context.status());
+        verify(statement).setObject(eq(1), any(UUID.class));
+        verify(statement).setDate(2, java.sql.Date.valueOf("2026-07-17"));
+        verify(statement).setTimestamp(3, Timestamp.from(cutoff.cutoffFromUtc()));
+        verify(statement).setTimestamp(4, Timestamp.from(cutoff.cutoffToUtc()));
+        verify(statement).setTimestamp(5, Timestamp.valueOf(now));
+        verify(statement).setInt(6, 3);
+        verify(statement).setString(7, "soporte01");
+        verify(statement).setString(8, "Correccion del corte");
+    }
+
+    @Test
     void createExecutionWithSnapshotShouldFailWhenProcedureReturnsNoContext() throws Exception {
         Connection connection = mock(Connection.class);
         CallableStatement statement = mock(CallableStatement.class);

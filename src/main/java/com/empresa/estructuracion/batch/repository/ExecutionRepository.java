@@ -13,6 +13,13 @@ public interface ExecutionRepository {
 
     ExecutionContext createExecutionWithSnapshot(BusinessDateCutoff cutoff, int maxAttempts, LocalDateTime now);
 
+    ExecutionContext createDateReprocessExecutionWithSnapshot(
+            BusinessDateCutoff cutoff,
+            int maxAttempts,
+            String requestedBy,
+            String reason,
+            LocalDateTime now);
+
     void markInProgress(UUID executionId, boolean retryAttempt, LocalDateTime now);
 
     void updateHeartbeat(UUID executionId, LocalDateTime now);
